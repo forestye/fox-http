@@ -1,0 +1,53 @@
+/*
+在这个头文件中，我们定义了一个名为Connection的类，它表示与客户端之间的一个连接。
+Connection类负责管理连接的生命周期、读取请求、写入响应以及调用RoutingModule来处理请求。
+我们使用boost::asio库进行网络通信，并使用std::shared_ptr管理Connection对象的生命周期。
+*/
+#ifndef CONNECTION_H
+#define CONNECTION_H
+
+#include <boost/asio.hpp>
+#include <memory>
+#include "http_request.h"
+#include "http_response.h"
+#include "routing_module.h"
+
+namespace asio = boost::asio;
+using asio::ip::tcp;
+
+class Connection : public std::enable_shared_from_this<Connection> {
+public:
+    explicit Connection(asio::io_context& io_context, RoutingModule& routing_module);
+
+    ~Connection();
+
+    // Get the socket associated with the connection
+    tcp::socket& socket();
+
+    // Start processing the connection
+    void start();
+
+    void cancel();
+private:
+    // Read data from the socket
+    void read();
+
+    // Write data to the socket
+    void write(const std::string& data);
+
+    // Handle the request and generate a response
+    void handle_request(const HttpRequest& request, HttpResponse& response);
+
+    // Socket for the connection
+    tcp::socket socket_;
+
+    // Buffer for incoming data
+    asio::streambuf request_buffer_;
+
+    // Routing module for handling requests
+    RoutingModule& routing_module_;
+
+    int random_number_;
+};
+
+#endif // CONNECTION_H
