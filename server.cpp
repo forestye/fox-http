@@ -23,14 +23,16 @@ run 函数启动服务器的主要功能。
 然后创建一个线程池并运行 io_context。线程池的大小等于系统支持的最大并发线程数。
 最后，等待线程池中的所有线程完成。
 */
-void Server::run() {
+void Server::run(unsigned int num_threads) {
 
     // Start accept loop
     accept();
 
     // Create a thread pool and run io_context
-    unsigned int num_threads = std::thread::hardware_concurrency()-1;
-    if(num_threads<1) num_threads = 1;
+    if(num_threads==0) {
+        num_threads = std::thread::hardware_concurrency()-1;
+        if(num_threads<1) num_threads = 1;
+    }
     cout<<"num_threads="<<num_threads<<endl;
     for (unsigned int i = 0; i < num_threads; ++i) {
         thread_pool_.emplace_back([this]() { io_context_.run(); });

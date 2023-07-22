@@ -12,7 +12,7 @@ class Server : public std::enable_shared_from_this<Server> {
 public:
     Server(unsigned short port, RoutingModule& routing_module);
 
-    void run();
+    void run(unsigned int num_threads=0);
 
     void stop();
 

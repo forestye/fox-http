@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I/usr/local/include -I/usr/local/include/boost
+CXXFLAGS = -g -std=c++17 -Wall -Wextra -I/usr/local/include -I/usr/local/include/boost
 LDFLAGS = -L/usr/local/lib -lgtest -lgtest_main -lpthread -lboost_system
 
 # Set your source and header files here
@@ -11,7 +11,7 @@ TEST_SRCS = server_test.cpp routing_module_test.cpp
 TEST_OBJS = $(TEST_SRCS:.cpp=.o)
 TESTS = server_test routing_module_test
 
-all: $(TESTS)
+all: $(TESTS) simple_server_test
 
 test: all
 	for test in $(TESTS); do ./$$test; done
