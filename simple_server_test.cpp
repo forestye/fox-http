@@ -5,6 +5,8 @@
 #include <csignal>
 #include "server.h"
 #include "routing_module.h"
+#include "server_status.h"
+
 using namespace std;
 using namespace boost;
 
@@ -33,6 +35,28 @@ public:
     }
 };
 
+class ServerStatusHandler : public BaseRequestHandler {
+public:
+    void operator()(const HttpRequest &request, HttpResponse &response) override {
+        set_common_response_headers(response);
+		string status_str=ServerStatus::instance().get_status_str();
+        std::string body = R"(
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>系统状态</title>
+            </head>
+            <body>
+                <h1>HTTP服务器状态</h1>
+            )"+status_str+R"(
+            </body>
+            </html>
+        )";
+        
+        response.set_body(body);
+    }
+};
+
 
 int main(int argc, char* argv[]) {
     unsigned int num_threads=0;
@@ -42,6 +66,7 @@ int main(int argc, char* argv[]) {
     unsigned short port = 8080;
     RoutingModule routing_module;
     routing_module.register_handler("/hello", HttpRequest::Method::GET, std::make_shared<HelloHandler>());
+	routing_module.register_handler("/status", HttpRequest::Method::GET, std::make_shared<ServerStatusHandler>());
 
     auto server = std::make_shared<Server>(port, routing_module);
 

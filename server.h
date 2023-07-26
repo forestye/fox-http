@@ -7,6 +7,7 @@
 #include <vector>
 #include "connection.h"
 #include "routing_module.h"
+#include "timer_manager.h"
 
 class Server : public std::enable_shared_from_this<Server> {
 public:
@@ -26,6 +27,8 @@ private:
     boost::asio::io_context io_context_;
     boost::asio::ip::tcp::acceptor acceptor_;
     std::vector<std::thread> thread_pool_;
+    TimerManager& timer_manager_ = TimerManager::instance();
+
 };
 
 #endif // SERVER_H

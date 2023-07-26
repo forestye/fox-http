@@ -1,7 +1,10 @@
 #include "server.h"
 #include <boost/bind/bind.hpp>
 #include "connection.h"
+#include "server_status.h"
+#include "timer_manager.h"
 #include <iostream>
+
 using namespace std;
 using boost::asio::ip::tcp;
 
@@ -24,6 +27,10 @@ run 函数启动服务器的主要功能。
 最后，等待线程池中的所有线程完成。
 */
 void Server::run(unsigned int num_threads) {
+    // Initialize and start the timer manager
+    TimerManager& timer_manager = TimerManager::instance();
+    timer_manager.init(io_context_, std::chrono::seconds(3)); 
+    timer_manager.start_timer();
 
     // Start accept loop
     accept();
@@ -54,6 +61,9 @@ stop 函数用于关闭服务器。
 停止 io_context 并等待线程池中的线程完成。
 */
 void Server::stop() {
+    // Stop the timer manager
+    TimerManager::instance().stop_timer();
+
     // Stop accepting new connections
     acceptor_.close();
 
@@ -89,7 +99,10 @@ handle_accept 函数是一个处理连接的回调函数。
 */
 void Server::handle_accept(std::shared_ptr<Connection> connection, const boost::system::error_code& error) {
     if (!error) {
+        // Add the connection to the timer manager
+        timer_manager_.add_connection(connection,connection->get_id());
         connection->start();
+		//ServerStatus::instance().increment_connection_count();
     }
 
     // Continue accepting connections

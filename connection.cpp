@@ -10,21 +10,24 @@ write()方法使用boost::asio::async_write()异步写入响应数据到客户�
 handle_request()方法将处理请求的任务委托给RoutingModule，它负责根据请求生成响应。
 */
 #include "connection.h"
+#include "server_status.h"
+//#include "timer_manager.h"
 #include <iostream>
-#include <iostream>
-#include <cstdlib>
 #include <ctime>
 using namespace std;
 
 Connection::Connection(asio::io_context& io_context, RoutingModule& routing_module)
-    : socket_(io_context), routing_module_(routing_module) {
+    : socket_(io_context), routing_module_(routing_module), keep_alive_(false) {
+	ServerStatus::instance().increment_connection_count();
+    last_active_time_ = std::chrono::system_clock::now();
 }
-
 Connection::~Connection() {
+	ServerStatus::instance().decrement_connection_count();
     if (socket_.is_open()) {
-        socket_.close();
+        close();
     }
 }
+
 tcp::socket& Connection::socket() {
     return socket_;
 }
@@ -39,57 +42,75 @@ void Connection::cancel() {
     }
 }
 
+void Connection::close() {
+    if (socket_.is_open()) {
+        socket_.close();
+    }
+}
+
+bool Connection::is_idle() const {
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - last_active_time_);
+	//cout<<"Connection("<<get_id()<<")::is_idle() - "<<duration.count()<<" seconds,"<<"IDLE_TIMEOUT_SECONDS.count()="<<IDLE_TIMEOUT_SECONDS.count()<<endl;
+    return duration.count() > IDLE_TIMEOUT_SECONDS.count();
+}
+
 void Connection::read() {
     auto self(shared_from_this());
     asio::async_read_until(socket_, request_buffer_, "\r\n\r\n",
-        [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
-            if (ec) {
-                if (ec == asio::error::eof) {
-                    // Client closed the connection, just close the server-side connection
-                    socket_.close();
-                } else {
-                    cout << "Connection::read() - Error: " << ec.message() << endl;
-                }
-            }
-            else {
-                HttpRequest request;
-                HttpResponse response;
-
-                std::istream request_stream(&request_buffer_);
-                request.parse(request_stream);
-
-                handle_request(request, response);
-
-                std::string response_string = response.to_string();
-                write(response_string);
-            }
-        });
-
-    // Set a timeout
-    //这里，我们为每个请求设置了一个5秒的超时时间。如果在5秒内服务器没有完成请求处理，连接将被关闭。
-    /*
-    boost::asio::steady_timer timer(socket_.get_executor());
-    timer.expires_after(std::chrono::seconds(5));  // Set the timeout to 5 seconds
-    timer.async_wait([self](const boost::system::error_code& ec) {
+    [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
         if (!ec) {
-            self->socket_.cancel();
+            last_active_time_ = std::chrono::system_clock::now(); // Update last active time
+            HttpRequest request;
+            HttpResponse response;
+
+            std::istream request_stream(&request_buffer_);
+            request.parse(request_stream);
+
+            handle_request(request, response);
+
+            std::string response_string = response.to_string();
+            write(response_string);
+        } else {
+            if (ec == asio::error::eof) {
+                socket_.close();
+            } else if (ec == asio::error::operation_aborted) {
+				cout << "Connection("<<get_id()<<")::read() - Operation cancelled." << endl;
+				socket_.close();
+			} else {
+                cout << "Connection("<<get_id()<<")::read() - Error: " << ec.message() << endl;
+            }
         }
     });
-    */
 }
+
 
 void Connection::write(const std::string& data) {
     auto self(shared_from_this());
     asio::async_write(socket_, asio::buffer(data),
         [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             if (!ec) {
-                socket_.shutdown(tcp::socket::shutdown_both);
+                last_active_time_ = std::chrono::system_clock::now(); // Update last active time
+                if (keep_alive_) {
+                    read();
+                } else {
+                    if (socket_.is_open()) {
+                        socket_.shutdown(tcp::socket::shutdown_both);
+                    }
+                }
             } else {
-                cout << "Connection::write() - Error: " << ec.message() << endl;
+                cout << "Connection("<<get_id()<<")::write() - Error: " << ec.message() << endl;
             }
         });
 }
 
 void Connection::handle_request(const HttpRequest& request, HttpResponse& response) {
     routing_module_.route_request(request, response);
+    auto connection_header = request.get_header("Connection");
+    if (connection_header.empty() || connection_header == "close") {
+        response.set_header("Connection", "close");
+        keep_alive_ = false;
+    } else {
+        response.set_header("Connection", "keep-alive");
+        keep_alive_ = true;
+    }
 }
