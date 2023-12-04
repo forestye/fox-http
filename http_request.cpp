@@ -12,6 +12,7 @@ get_method()、get_path()、get_version()和get_header()方法用于访问请求
 #include <string>
 #include <map>
 #include <istream>
+using namespace std;
 
 void HttpRequest::parse(std::istream& input) {
     std::string line;
@@ -50,6 +51,9 @@ void HttpRequest::parse_request_line(const std::string& line) {
 
     ss >> method_str >> path_ >> version_;
 
+	// 把method_str转成大写
+	std::transform(method_str.begin(), method_str.end(), method_str.begin(), ::toupper);
+
     if (method_str == "GET") {
         method_ = Method::GET;
     } else if (method_str == "POST") {
@@ -58,6 +62,8 @@ void HttpRequest::parse_request_line(const std::string& line) {
         method_ = Method::PUT;
     } else if (method_str == "DELETE") {
         method_ = Method::DELETE;
+	} else if (method_str == "OPTIONS") {
+		method_ = Method::OPTIONS;
     } else {
         method_ = Method::UNKNOWN;
     }

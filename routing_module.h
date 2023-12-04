@@ -28,7 +28,7 @@ public:
 
 private:
     // Map to store the registered request handlers
-    std::map<std::pair<std::string, HttpRequest::Method>, RequestHandler> handlers_;
+	std::map<std::string, std::map<HttpRequest::Method, std::shared_ptr<BaseRequestHandler>>> handlers_;
 };
 
 #endif // ROUTING_MODULE_H

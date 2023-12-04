@@ -11,7 +11,19 @@ HttpRequest类提供了用于解析请求的方法，以及用于访问请求的
 
 class HttpRequest {
 public:
-    enum class Method { GET, POST, PUT, DELETE, UNKNOWN };
+    enum class Method { GET, POST, PUT, DELETE, OPTIONS, UNKNOWN };
+
+	static std::string MethodToString(Method method) {
+		switch (method) {
+			case Method::GET: return "GET";
+			case Method::POST: return "POST";
+			case Method::PUT: return "PUT";
+			case Method::DELETE: return "DELETE";
+			case Method::OPTIONS: return "OPTIONS";
+			case Method::UNKNOWN: return "UNKNOWN";
+			default: return "UNKNOWN";
+		}
+	}
 
     // Parse the request from the input stream
     void parse(std::istream& input);
