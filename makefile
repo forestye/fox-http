@@ -4,8 +4,10 @@ LDFLAGS = -L/usr/local/lib -lgtest -lgtest_main -lpthread -lboost_system
 
 # Set your source and header files here
 SRCS = server.cpp connection.cpp http_request.cpp http_response.cpp routing_module.cpp request_handler.cpp server_status.cpp timer_manager.cpp
-HDRS = server.h connection.h http_request.h http_response.h routing_module.h
+HDRS = server.h connection.h http_request.h http_response.h routing_module.h request_handler.h server_status.h timer_manager.h
 OBJS = $(SRCS:.cpp=.o)
+
+STATIC_LIB = liblight_httpd.a
 
 TEST_SRCS = server_test.cpp routing_module_test.cpp
 TEST_OBJS = $(TEST_SRCS:.cpp=.o)
@@ -26,9 +28,17 @@ $(foreach test, $(TESTS), $(eval $(call test_rule, $(test))))
 simple_server_test: simple_server_test.cpp $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
+$(STATIC_LIB): $(OBJS)
+	ar rcs $@ $^
+
 %.o: %.cpp $(HDRS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-.PHONY: clean test
+.PHONY: clean test install
 clean:
 	rm -f *.o simple_server_test $(TESTS)
+
+install: $(STATIC_LIB)
+	cp $(STATIC_LIB) /usr/local/lib
+	mkdir -p /usr/local/include/light_httpd
+	cp $(HDRS) /usr/local/include/light_httpd
