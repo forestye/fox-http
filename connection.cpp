@@ -14,7 +14,6 @@ handle_request()方法将处理请求的任务委托给RoutingModule，它负责
 //#include "timer_manager.h"
 #include <iostream>
 #include <ctime>
-#include <algorithm>
 #include "logger.h"
 using namespace std;
 
@@ -74,12 +73,7 @@ void Connection::read() {
             auto response_string = std::make_shared<std::string>(response.to_string());
             write(response_string);
 
-            std::streampos consumed_pos = request_stream.tellg();
-            if (consumed_pos < 0) {
-                consumed_pos = static_cast<std::streampos>(bytes_transferred);
-            }
-            const auto consumed = static_cast<std::size_t>(std::min<std::streampos>(consumed_pos, request_buffer_.size()));
-            request_buffer_.consume(consumed);
+            request_buffer_.consume(bytes_transferred);
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
