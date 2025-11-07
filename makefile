@@ -1,5 +1,5 @@
 CXX = ccache g++
-CXXFLAGS = -g -std=c++17 -Wall -Wextra -I/usr/local/include -I/usr/local/include/boost
+CXXFLAGS = -g -std=c++17 -Wall -Wextra -I/usr/local/include -I/usr/local/include/boost -DENABLE_DEBUG_LOG
 LDFLAGS = -L/usr/local/lib -lgtest -lgtest_main -lpthread
 
 # Set your source and header files here
