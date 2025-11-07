@@ -46,7 +46,7 @@ private:
     void read();
 
     // Write data to the socket
-    void write(const std::string& data);
+    void write(std::shared_ptr<std::string> data);
 
     // Handle the request and generate a response
     void handle_request(const HttpRequest& request, HttpResponse& response);

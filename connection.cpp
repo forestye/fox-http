@@ -65,15 +65,19 @@ void Connection::read() {
             HttpRequest request;
             HttpResponse response;
 
+            std::size_t buffer_size_before = request_buffer_.size();
             std::istream request_stream(&request_buffer_);
             request.parse(request_stream);
 
             handle_request(request, response);
 
-            std::string response_string = response.to_string();
+            auto response_string = std::make_shared<std::string>(response.to_string());
             write(response_string);
-            if (request_buffer_.size() == 0) {
-                request_buffer_.consume(request_buffer_.size());
+
+            const std::size_t remaining = request_buffer_.size();
+            const std::size_t consumed = buffer_size_before > remaining ? buffer_size_before - remaining : buffer_size_before;
+            if (consumed > 0) {
+                request_buffer_.consume(consumed);
             }
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
@@ -90,10 +94,10 @@ void Connection::read() {
 }
 
 
-void Connection::write(const std::string& data) {
+void Connection::write(std::shared_ptr<std::string> data) {
     auto self(shared_from_this());
-    asio::async_write(socket_, asio::buffer(data),
-        [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+    asio::async_write(socket_, asio::buffer(*data),
+        [this, self, data](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             is_processing_.store(false, std::memory_order_relaxed);
             if (!ec) {
                 last_active_time_ = std::chrono::system_clock::now(); // Update last active time
