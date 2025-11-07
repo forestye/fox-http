@@ -14,6 +14,7 @@ handle_request()方法将处理请求的任务委托给RoutingModule，它负责
 //#include "timer_manager.h"
 #include <iostream>
 #include <ctime>
+#include <sstream>
 #include "logger.h"
 using namespace std;
 
@@ -65,8 +66,17 @@ void Connection::read() {
             HttpRequest request;
             HttpResponse response;
 
-            std::size_t buffer_size_before = request_buffer_.size();
-            std::istream request_stream(&request_buffer_);
+            const auto buffers = request_buffer_.data();
+            std::string raw_request(boost::asio::buffers_begin(buffers), boost::asio::buffers_end(buffers));
+            auto header_end_pos = raw_request.find("\r\n\r\n");
+            if (header_end_pos == std::string::npos) {
+                DEBUG_LOG("Connection(" << get_id() << ")::read() - malformed request header");
+                socket_.close();
+                return;
+            }
+            header_end_pos += 4; // include delimiter
+
+            std::istringstream request_stream(raw_request.substr(0, header_end_pos));
             request.parse(request_stream);
 
             handle_request(request, response);
@@ -74,11 +84,7 @@ void Connection::read() {
             auto response_string = std::make_shared<std::string>(response.to_string());
             write(response_string);
 
-            const std::size_t remaining = request_buffer_.size();
-            const std::size_t consumed = buffer_size_before > remaining ? buffer_size_before - remaining : buffer_size_before;
-            if (consumed > 0) {
-                request_buffer_.consume(consumed);
-            }
+            request_buffer_.consume(header_end_pos);
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
