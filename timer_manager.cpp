@@ -42,7 +42,7 @@ void TimerManager::check_idle_connections() {
     auto it = connections_.begin();
     while (it != connections_.end()) {
         if (std::shared_ptr<Connection> connection = it->second.lock()) {
-            if (connection->is_idle()) {
+            if (!connection->is_processing() && connection->is_idle()) {
                 connection->cancel();
                 DEBUG_LOG("connection timeout:" << connection->get_id());
 			ServerStatus::instance().increment_connection_timeout_count();

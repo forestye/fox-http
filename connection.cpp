@@ -60,6 +60,7 @@ void Connection::read() {
     asio::async_read_until(socket_, request_buffer_, "\r\n\r\n",
     [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
         if (!ec) {
+            is_processing_.store(true, std::memory_order_relaxed);
             last_active_time_ = std::chrono::system_clock::now(); // Update last active time
             HttpRequest request;
             HttpResponse response;
@@ -73,6 +74,7 @@ void Connection::read() {
             write(response_string);
             request_buffer_.consume(bytes_transferred);
         } else {
+            is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
                 socket_.close();
             } else if (ec == asio::error::operation_aborted) {
@@ -90,6 +92,7 @@ void Connection::write(const std::string& data) {
     auto self(shared_from_this());
     asio::async_write(socket_, asio::buffer(data),
         [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+            is_processing_.store(false, std::memory_order_relaxed);
             if (!ec) {
                 last_active_time_ = std::chrono::system_clock::now(); // Update last active time
                 if (keep_alive_) {
