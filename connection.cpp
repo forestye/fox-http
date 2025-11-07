@@ -70,6 +70,7 @@ void Connection::read() {
 
             std::string response_string = response.to_string();
             write(response_string);
+            request_buffer_.consume(bytes_transferred);
         } else {
             if (ec == asio::error::eof) {
                 socket_.close();
