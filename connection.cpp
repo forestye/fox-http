@@ -72,11 +72,9 @@ void Connection::read() {
 
             std::string response_string = response.to_string();
             write(response_string);
-            auto consumed = request_stream.tellg();
-            if (consumed < 0) {
-                consumed = static_cast<std::streampos>(bytes_transferred);
+            if (request_buffer_.size() == 0) {
+                request_buffer_.consume(request_buffer_.size());
             }
-            request_buffer_.consume(static_cast<std::size_t>(consumed));
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
