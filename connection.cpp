@@ -14,6 +14,7 @@ handle_request()方法将处理请求的任务委托给RoutingModule，它负责
 //#include "timer_manager.h"
 #include <iostream>
 #include <ctime>
+#include "logger.h"
 using namespace std;
 
 Connection::Connection(asio::io_context& io_context, RoutingModule& routing_module)
@@ -75,10 +76,10 @@ void Connection::read() {
             if (ec == asio::error::eof) {
                 socket_.close();
             } else if (ec == asio::error::operation_aborted) {
-				cout << "Connection("<<get_id()<<")::read() - Operation cancelled." << endl;
-				socket_.close();
-			} else {
-                cout << "Connection("<<get_id()<<")::read() - Error: " << ec.message() << endl;
+                DEBUG_LOG("Connection(" << get_id() << ")::read() - Operation cancelled.");
+                socket_.close();
+            } else {
+                DEBUG_LOG("Connection(" << get_id() << ")::read() - Error: " << ec.message());
             }
         }
     });
@@ -99,7 +100,7 @@ void Connection::write(const std::string& data) {
                     }
                 }
             } else {
-                cout << "Connection("<<get_id()<<")::write() - Error: " << ec.message() << endl;
+                DEBUG_LOG("Connection(" << get_id() << ")::write() - Error: " << ec.message());
             }
         });
 }

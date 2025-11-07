@@ -64,7 +64,7 @@ private:
     // The time when the connection was last active
     std::chrono::system_clock::time_point last_active_time_;
 
-    static constexpr std::chrono::seconds IDLE_TIMEOUT_SECONDS = std::chrono::seconds(5);
+    static constexpr std::chrono::seconds IDLE_TIMEOUT_SECONDS = std::chrono::seconds(30);
 };
 
 #endif // CONNECTION_H

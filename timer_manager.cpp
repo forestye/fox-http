@@ -2,6 +2,7 @@
 #include "connection.h"
 #include "server_status.h"
 #include <iostream>
+#include "logger.h"
 using namespace std;
 
 void TimerManager::add_connection(std::shared_ptr<Connection> connection,size_t id) {
@@ -18,7 +19,7 @@ void TimerManager::remove_connection(size_t id) {
 
 void TimerManager::start_timer() {
     if (!timer_) {
-        std::cout << "TimerManager not initialized. Call TimerManager::init before starting the timer." << std::endl;
+        std::cerr << "TimerManager not initialized. Call TimerManager::init before starting the timer." << std::endl;
         return;
     }
 	timer_->expires_after(interval_);
@@ -43,8 +44,8 @@ void TimerManager::check_idle_connections() {
         if (std::shared_ptr<Connection> connection = it->second.lock()) {
             if (connection->is_idle()) {
                 connection->cancel();
-				cout<<"connection timeout:"<<connection->get_id()<<endl;
-				ServerStatus::instance().increment_connection_timeout_count();
+                DEBUG_LOG("connection timeout:" << connection->get_id());
+			ServerStatus::instance().increment_connection_timeout_count();
             } 
         }
 		++it;
@@ -56,7 +57,7 @@ void TimerManager::check_idle_connections() {
     while (it != connections_.end()) {
         if (std::shared_ptr<Connection> connection = it->second.lock()) {
 			++it;
-		} else {
+	} else {
             it = connections_.erase(it);
         }
     }

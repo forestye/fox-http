@@ -3,6 +3,7 @@
 #include "connection.h"
 #include "server_status.h"
 #include "timer_manager.h"
+#include "logger.h"
 #include <iostream>
 
 using namespace std;
@@ -40,7 +41,7 @@ void Server::run(unsigned int num_threads) {
         num_threads = std::thread::hardware_concurrency()-1;
         if(num_threads<1) num_threads = 1;
     }
-    cout<<"num_threads="<<num_threads<<endl;
+    DEBUG_LOG("num_threads=" << num_threads);
     for (unsigned int i = 0; i < num_threads; ++i) {
         thread_pool_.emplace_back([this]() { io_context_.run(); });
     }
@@ -87,7 +88,7 @@ void Server::accept() {
                                self->handle_accept(connection,ec);
                            });
     } catch (const std::bad_weak_ptr& e) {
-        cout << "Exception: " << e.what() << endl;
+        DEBUG_LOG("Exception: " << e.what());
     }
 }
 

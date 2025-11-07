@@ -1,6 +1,6 @@
 CXX = ccache g++
 CXXFLAGS = -g -std=c++17 -Wall -Wextra -I/usr/local/include -I/usr/local/include/boost
-LDFLAGS = -L/usr/local/lib -lgtest -lgtest_main -lpthread -lboost_system
+LDFLAGS = -L/usr/local/lib -lgtest -lgtest_main -lpthread
 
 # Set your source and header files here
 SRCS = server.cpp connection.cpp http_request.cpp http_response.cpp routing_module.cpp request_handler.cpp server_status.cpp timer_manager.cpp
