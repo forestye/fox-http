@@ -14,7 +14,6 @@ handle_request()方法将处理请求的任务委托给RoutingModule，它负责
 //#include "timer_manager.h"
 #include <iostream>
 #include <ctime>
-#include <sstream>
 #include "logger.h"
 using namespace std;
 
@@ -66,25 +65,14 @@ void Connection::read() {
             HttpRequest request;
             HttpResponse response;
 
-            const auto buffers = request_buffer_.data();
-            std::string raw_request(boost::asio::buffers_begin(buffers), boost::asio::buffers_end(buffers));
-            auto header_end_pos = raw_request.find("\r\n\r\n");
-            if (header_end_pos == std::string::npos) {
-                DEBUG_LOG("Connection(" << get_id() << ")::read() - malformed request header");
-                socket_.close();
-                return;
-            }
-            header_end_pos += 4; // include delimiter
-
-            std::istringstream request_stream(raw_request.substr(0, header_end_pos));
+            std::istream request_stream(&request_buffer_);
             request.parse(request_stream);
 
             handle_request(request, response);
 
             auto response_string = std::make_shared<std::string>(response.to_string());
             write(response_string);
-
-            request_buffer_.consume(header_end_pos);
+            request_buffer_.consume(bytes_transferred);
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
