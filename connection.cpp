@@ -14,6 +14,8 @@ handle_request()方法将处理请求的任务委托给RoutingModule，它负责
 //#include "timer_manager.h"
 #include <iostream>
 #include <ctime>
+#include <sstream>
+#include <algorithm>
 #include "logger.h"
 using namespace std;
 
@@ -65,7 +67,19 @@ void Connection::read() {
             HttpRequest request;
             HttpResponse response;
 
-            std::istream request_stream(&request_buffer_);
+            static const std::string HEADER_DELIMITER = "\r\n\r\n";
+            auto buffers = request_buffer_.data();
+            auto begin = boost::asio::buffers_begin(buffers);
+            auto end = boost::asio::buffers_end(buffers);
+            auto delimiter_it = std::search(begin, end, HEADER_DELIMITER.begin(), HEADER_DELIMITER.end());
+            if (delimiter_it == end) {
+                DEBUG_LOG("Connection(" << get_id() << ")::read() - header delimiter not found");
+                socket_.close();
+                return;
+            }
+            auto header_length = static_cast<std::size_t>(std::distance(begin, delimiter_it) + HEADER_DELIMITER.size());
+            std::string header_data(begin, begin + header_length);
+            std::istringstream request_stream(header_data);
             request.parse(request_stream);
 
             handle_request(request, response);
@@ -73,7 +87,7 @@ void Connection::read() {
             auto response_string = std::make_shared<std::string>(response.to_string());
             write(response_string);
 
-            request_buffer_.consume(bytes_transferred);
+            request_buffer_.consume(header_length);
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
