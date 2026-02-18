@@ -67,27 +67,24 @@ void Connection::read() {
             HttpRequest request;
             HttpResponse response;
 
-            static const std::string HEADER_DELIMITER = "\r\n\r\n";
-            auto buffers = request_buffer_.data();
-            auto begin = boost::asio::buffers_begin(buffers);
-            auto end = boost::asio::buffers_end(buffers);
-            auto delimiter_it = std::search(begin, end, HEADER_DELIMITER.begin(), HEADER_DELIMITER.end());
-            if (delimiter_it == end) {
-                DEBUG_LOG("Connection(" << get_id() << ")::read() - header delimiter not found");
-                socket_.close();
-                return;
-            }
-            auto header_length = static_cast<std::size_t>(std::distance(begin, delimiter_it) + HEADER_DELIMITER.size());
-            std::string header_data(begin, begin + header_length);
+            // bytes_transferred includes the delimiter "\r\n\r\n",
+            // guaranteed by async_read_until on success
+            auto begin = boost::asio::buffers_begin(request_buffer_.data());
+            std::string header_data(begin, begin + bytes_transferred);
             std::istringstream request_stream(header_data);
             request.parse(request_stream);
 
             handle_request(request, response);
 
             auto response_string = std::make_shared<std::string>(response.to_string());
-            write(response_string);
 
-            request_buffer_.consume(header_length);
+            // Consume buffer BEFORE starting async write to avoid race
+            // condition with multi-threaded io_context: write may complete
+            // on another thread and trigger the next read() before consume
+            // runs on this thread.
+            request_buffer_.consume(bytes_transferred);
+
+            write(response_string);
         } else {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec == asio::error::eof) {
