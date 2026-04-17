@@ -8,6 +8,7 @@
 namespace httpserver {
 
 class HttpHandler;
+class HttpRequest;
 
 class Connection : public std::enable_shared_from_this<Connection> {
 public:
@@ -27,6 +28,8 @@ public:
 
 private:
     void read();
+    void read_body(std::shared_ptr<HttpRequest> request, std::size_t body_len);
+    void dispatch(HttpRequest& request);
     void write(std::shared_ptr<std::string> data);
 
     boost::asio::ip::tcp::socket socket_;

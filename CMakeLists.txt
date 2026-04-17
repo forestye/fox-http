@@ -24,6 +24,8 @@ add_library(httpserver STATIC
     src/http_request.cpp
     src/http_response.cpp
     src/http_server.cpp
+    src/http_router.cpp
+    src/http_util.cpp
     src/connection.cpp
     src/timer_manager.cpp
     src/server_status.cpp
@@ -59,6 +61,25 @@ set_target_properties(httpserver PROPERTIES
 if(HTTPSERVER_BUILD_TESTS)
     add_executable(hello_world test/hello_world.cpp)
     target_link_libraries(hello_world PRIVATE httpserver::httpserver)
+
+    find_package(GTest)
+    if(GTest_FOUND)
+        enable_testing()
+        add_executable(unit_tests
+            test/router_test.cpp
+            test/util_test.cpp
+            test/request_test.cpp
+        )
+        target_link_libraries(unit_tests PRIVATE
+            httpserver::httpserver
+            GTest::gtest
+            GTest::gtest_main
+        )
+        include(GoogleTest)
+        gtest_discover_tests(unit_tests)
+    else()
+        message(STATUS "GTest not found; skipping unit_tests target")
+    endif()
 endif()
 
 # ─── Install ─────────────────────────────────────────────────────

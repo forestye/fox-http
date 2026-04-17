@@ -42,6 +42,14 @@ public:
     bool has_query(std::string_view name) const;
     const std::map<std::string, std::string>& queries() const { return query_params_; }
 
+    // Path parameters captured by a dynamic route (e.g. ":id" or "*path").
+    // Set by HttpRouter before invoking the registered handler.
+    std::string_view param(std::string_view name) const;
+    bool has_param(std::string_view name) const;
+    const std::map<std::string, std::string>& params() const { return path_params_; }
+    void set_param(std::string name, std::string value);
+    void clear_params();
+
     // Returns Content-Length header value, or 0 if absent/invalid.
     std::size_t content_length() const;
 
@@ -60,6 +68,7 @@ private:
     std::map<std::string, std::string, CiLess> headers_;
     std::string body_;
     std::map<std::string, std::string> query_params_;
+    std::map<std::string, std::string> path_params_;
 };
 
 }  // namespace httpserver

@@ -4,6 +4,36 @@
 
 ---
 
+## 2026-04-17 Phase 2：内置 Router、合并 http_common、完善 body 读取
+
+### 本次改动（Phase 2）
+
+- 新增 `HttpRouter`（`include/httpserver/http_router.h` + `src/http_router.cpp`）
+  - 静态路由（unordered_map 精确匹配）
+  - 动态 `:name` 参数段（按 segment_count 分桶）
+  - 尾部 `*name` 通配（按 literal 前缀长度排序，长前缀优先）
+  - 默认 404 / 405（Allow header 自动填），可覆盖
+- `HttpRequest` 新增 path param 访问：`param(name)` / `has_param` / `set_param` /
+  `clear_params`。Router 在匹配后写入。
+- 合并 `http_common` 工具函数到 `include/httpserver/http_util.h`
+  （`httpserver::util::url_decode` / `parse_form_urlencoded` / `stringify<T>` /
+  `bad_request` / `not_found` / `internal_error`）。
+- **补：`Connection` 现在按 Content-Length eager 读 body**。Phase 1 漏了这块，
+  导致 POST 处理器拿不到 body——迁移 `route` / `weave++` 需要这个能力。实现上
+  先 drain streambuf 中已缓存的溢出字节（async_read_until 通常会超读），不足部分
+  再 `async_read(transfer_exactly)` 补齐。
+- 新增单元测试：`test/router_test.cpp`（10 个用例覆盖静态/动态/catchall/优先级/
+  405/自定义 404）、`test/util_test.cpp`（11 个）、`test/request_test.cpp`
+  （6 个）。27 个测试全部通过。
+- `hello_world` demo 改用 `HttpRouter`，演示静态 / `:id` / `*path` / POST 各路径。
+
+### 性能回归
+
+ab `-n 100000 -c 1000 -k` 三次运行：289k / 292k / 280k req/s。与 Phase 1
+（274k / 285k / 293k）基本持平，Router 分发开销可忽略。
+
+---
+
 ## 2026-04-17 Phase 1：核心骨架重构（PhotonLibOS 迁移）
 
 ### 背景

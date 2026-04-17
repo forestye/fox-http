@@ -174,6 +174,24 @@ bool HttpRequest::has_query(std::string_view name) const {
     return query_params_.find(std::string(name)) != query_params_.end();
 }
 
+std::string_view HttpRequest::param(std::string_view name) const {
+    auto it = path_params_.find(std::string(name));
+    if (it == path_params_.end()) return {};
+    return it->second;
+}
+
+bool HttpRequest::has_param(std::string_view name) const {
+    return path_params_.find(std::string(name)) != path_params_.end();
+}
+
+void HttpRequest::set_param(std::string name, std::string value) {
+    path_params_[std::move(name)] = std::move(value);
+}
+
+void HttpRequest::clear_params() {
+    path_params_.clear();
+}
+
 std::size_t HttpRequest::content_length() const {
     auto v = header("Content-Length");
     if (v.empty()) return 0;
