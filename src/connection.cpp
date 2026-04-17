@@ -6,28 +6,71 @@
 #include "logger.h"
 #include "server_status.h"
 
+#include <algorithm>
 #include <string>
-#include <string_view>
+#include <vector>
 
 namespace httpserver {
 
 namespace asio = boost::asio;
 using asio::ip::tcp;
 
-Connection::Connection(asio::io_context& io_context, HttpHandler& handler)
-    : socket_(io_context), handler_(handler) {
+// Synchronous writer over a tcp::socket. Used by HttpResponse in Immediate
+// and Stream modes. The caller is responsible for not interleaving writes
+// from multiple threads; in our design only one handler / stream-lambda
+// writes to a given socket at any time.
+class Connection::SocketStream : public ResponseStream {
+public:
+    explicit SocketStream(tcp::socket& sock) : sock_(sock) {}
+
+    bool write(const void* data, std::size_t n) override {
+        boost::system::error_code ec;
+        asio::write(sock_, asio::buffer(data, n), ec);
+        return !ec;
+    }
+
+    bool writev(const struct iovec* iov, int iovcnt) override {
+        std::vector<asio::const_buffer> bufs;
+        bufs.reserve(static_cast<std::size_t>(iovcnt));
+        for (int i = 0; i < iovcnt; ++i) {
+            bufs.emplace_back(iov[i].iov_base, iov[i].iov_len);
+        }
+        boost::system::error_code ec;
+        asio::write(sock_, bufs, ec);
+        return !ec;
+    }
+
+private:
+    tcp::socket& sock_;
+};
+
+Connection::Connection(asio::io_context& io_context,
+                       HttpHandler& handler,
+                       StreamDispatcher& dispatcher)
+    : socket_(io_context),
+      handler_(handler),
+      dispatcher_(dispatcher),
+      socket_stream_(std::make_unique<SocketStream>(socket_)) {
     ServerStatus::instance().increment_connection_count();
     last_active_time_ = std::chrono::system_clock::now();
 }
 
 Connection::~Connection() {
     ServerStatus::instance().decrement_connection_count();
-    if (socket_.is_open()) {
-        close();
-    }
+    if (socket_.is_open()) close();
 }
 
 void Connection::start() {
+    // TCP_NODELAY: disable Nagle's algorithm. HTTP responses are typically
+    // assembled and sent in full; we never benefit from Nagle batching, and
+    // we actively lose throughput when sync writes in Immediate mode trigger
+    // 40 ms delayed-ACK stalls.
+    boost::system::error_code ec;
+    socket_.set_option(tcp::no_delay(true), ec);
+    if (ec) {
+        HTTPSERVER_LOG("Connection(" << id() << ") set TCP_NODELAY failed: "
+                       << ec.message());
+    }
     read();
 }
 
@@ -45,22 +88,7 @@ bool Connection::is_idle() const {
     return duration.count() > kIdleTimeout.count();
 }
 
-void Connection::dispatch(HttpRequest& request) {
-    HttpResponse response;
-    handler_.handle(request, response);
-
-    auto conn_hdr = request.header("Connection");
-    if (conn_hdr.empty() || conn_hdr == "close") {
-        response.headers().insert("Connection", "close");
-        keep_alive_ = false;
-    } else {
-        response.headers().insert("Connection", "keep-alive");
-        keep_alive_ = true;
-    }
-
-    auto response_string = std::make_shared<std::string>(response.serialize());
-    write(response_string);
-}
+// ── read / body ─────────────────────────────────────────────────────
 
 void Connection::read() {
     auto self(shared_from_this());
@@ -79,7 +107,6 @@ void Connection::read() {
             is_processing_.store(true, std::memory_order_relaxed);
             last_active_time_ = std::chrono::system_clock::now();
 
-            // bytes_transferred includes the delimiter "\r\n\r\n".
             auto begin = asio::buffers_begin(request_buffer_.data());
             std::string header_data(begin, begin + bytes_transferred);
             request_buffer_.consume(bytes_transferred);
@@ -93,17 +120,16 @@ void Connection::read() {
 
             std::size_t body_len = request->content_length();
             if (body_len == 0) {
-                dispatch(*request);
+                dispatch(std::move(request));
                 return;
             }
-
-            read_body(request, body_len);
+            read_body(std::move(request), body_len);
         });
 }
 
 void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t body_len) {
-    // Part of the body may already be sitting in request_buffer_ (async_read_until
-    // can overshoot the delimiter). Drain what we have first.
+    // Drain any body bytes already in request_buffer_ from the async_read_until
+    // overshoot.
     std::string body;
     body.reserve(body_len);
     std::size_t have = request_buffer_.size();
@@ -116,7 +142,7 @@ void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t bod
 
     if (body.size() == body_len) {
         request->set_body(std::move(body));
-        dispatch(*request);
+        dispatch(std::move(request));
         return;
     }
 
@@ -136,17 +162,62 @@ void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t bod
                 return;
             }
             request->set_body(std::move(*body_ptr));
-            dispatch(*request);
+            dispatch(request);
         });
 }
 
-void Connection::write(std::shared_ptr<std::string> data) {
+// ── dispatch / modes ────────────────────────────────────────────────
+
+void Connection::dispatch(std::shared_ptr<HttpRequest> request) {
+    // Keep the response on the stack for the common Buffered/Immediate paths
+    // to avoid a per-request heap allocation. Only Stream mode needs to outlive
+    // this frame, in which case we move the response into a shared_ptr below.
+    HttpResponse response;
+    response.attach_stream(socket_stream_.get());
+
+    auto conn_hdr = request->header("Connection");
+    if (conn_hdr.empty() || conn_hdr == "close") {
+        keep_alive_ = false;
+    } else {
+        keep_alive_ = true;
+    }
+    response.headers().insert("Connection", keep_alive_ ? "keep-alive" : "close");
+
+    handler_.handle(*request, response);
+
+    switch (response.mode()) {
+        case HttpResponse::Mode::Buffered:
+            write_buffered(response);
+            return;
+
+        case HttpResponse::Mode::Immediate:
+            // Handler wrote everything synchronously. If no Content-Length was
+            // set, we can't safely keep-alive (client can't frame the body).
+            if (!response.headers().contains("Content-Length") &&
+                !response.headers().contains("Transfer-Encoding")) {
+                keep_alive_ = false;
+            }
+            finish_request();
+            return;
+
+        case HttpResponse::Mode::Stream: {
+            auto resp_heap = std::make_shared<HttpResponse>(std::move(response));
+            resp_heap->attach_stream(socket_stream_.get());
+            post_stream_work(std::move(request), std::move(resp_heap));
+            return;
+        }
+    }
+}
+
+void Connection::write_buffered(HttpResponse& response) {
+    auto payload = std::make_shared<std::string>(response.serialize());
     auto self(shared_from_this());
-    asio::async_write(socket_, asio::buffer(*data),
-        [this, self, data](const boost::system::error_code& ec, std::size_t /*bytes_transferred*/) {
+    asio::async_write(socket_, asio::buffer(*payload),
+        [this, self, payload](const boost::system::error_code& ec, std::size_t /*n*/) {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec) {
-                HTTPSERVER_LOG("Connection(" << id() << ")::write() - Error: " << ec.message());
+                HTTPSERVER_LOG("Connection(" << id() << ")::write_buffered() - "
+                               << ec.message());
                 return;
             }
             last_active_time_ = std::chrono::system_clock::now();
@@ -156,6 +227,31 @@ void Connection::write(std::shared_ptr<std::string> data) {
                 socket_.shutdown(tcp::socket::shutdown_both);
             }
         });
+}
+
+void Connection::post_stream_work(std::shared_ptr<HttpRequest> request,
+                                  std::shared_ptr<HttpResponse> response) {
+    auto self(shared_from_this());
+    dispatcher_.post([self, request, response]() {
+        auto& fn = response->stream_fn();
+        if (fn) fn(*response);
+        response->end_chunks();
+
+        self->socket_.get_executor().execute([self]() {
+            self->finish_request();
+        });
+    });
+}
+
+void Connection::finish_request() {
+    is_processing_.store(false, std::memory_order_relaxed);
+    last_active_time_ = std::chrono::system_clock::now();
+    if (keep_alive_) {
+        read();
+    } else if (socket_.is_open()) {
+        boost::system::error_code ec;
+        socket_.shutdown(tcp::socket::shutdown_both, ec);
+    }
 }
 
 }  // namespace httpserver

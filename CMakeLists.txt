@@ -30,6 +30,8 @@ add_library(httpserver STATIC
     src/timer_manager.cpp
     src/server_status.cpp
 )
+
+# Response streaming uses iovec/writev from <sys/uio.h> — POSIX.
 add_library(httpserver::httpserver ALIAS httpserver)
 
 target_include_directories(httpserver
@@ -69,12 +71,14 @@ if(HTTPSERVER_BUILD_TESTS)
             test/router_test.cpp
             test/util_test.cpp
             test/request_test.cpp
+            test/response_test.cpp
         )
         target_link_libraries(unit_tests PRIVATE
             httpserver::httpserver
             GTest::gtest
             GTest::gtest_main
         )
+        target_include_directories(unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
         include(GoogleTest)
         gtest_discover_tests(unit_tests)
     else()

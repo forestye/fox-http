@@ -21,6 +21,11 @@ public:
     // and must outlive run().
     void set_handler(HttpHandler* handler);
 
+    // Size of the lazy-init handler thread pool used for Stream-mode
+    // responses. 0 means default (4 * hardware_concurrency). No threads are
+    // created until the first stream response runs.
+    void set_stream_pool_size(std::size_t n);
+
     // Blocks until SIGINT / SIGTERM / SIGTSTP is received. Returns 0 on
     // clean shutdown, non-zero on startup failure.
     int run();

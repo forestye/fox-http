@@ -4,6 +4,68 @@
 
 ---
 
+## 2026-04-17 Phase 3：流式响应（writev 零拷贝 + stream lambda + SSE/chunked）
+
+### 本次改动（Phase 3）
+
+- `HttpResponse` 引入三种互斥写入模式 `Mode { Buffered, Immediate, Stream }`，
+  首次调用 `set_body` / `write` / `writev` / `stream` 时锁定。模式冲突触发 assert。
+- **Immediate 模式**：`write(data, n)` / `writev(iov, n)` 在 io 线程上同步 writev
+  落地。首次调用把 headers 合并到 iov 头部，单次 syscall 发完（见下"coalesce"）。
+- **Stream 模式**：`resp.stream(fn)` 把 lambda 移到 handler 线程池执行，io 线程
+  立即放回继续 accept/read 其他请求。配套 `write_chunk(data, n)` /
+  `end_chunks()`（Transfer-Encoding: chunked 自动管理）与
+  `write_sse_event(event, data)`（SSE 格式，自动 data 多行前缀）。
+- 内部新增 `ResponseStream` / `StreamDispatcher` 接口（`src/response_stream.h`），
+  Connection 实现 `SocketStream`（同步 boost::asio::write over tcp::socket），
+  `HttpServer::Impl` 实现 `StreamDispatcher`（懒加载 `boost::asio::thread_pool`，
+  默认 `4 × hw_concurrency`，可通过 `set_stream_pool_size()` 配置）。
+- `Connection::dispatch()` 按 Response 模式分流：Buffered → 原 `async_write`；
+  Immediate → 直接 finish（handler 已经写完）；Stream → 把 lambda post 到 handler
+  pool，完成后 post 回 io 线程续 keep-alive。
+- Buffered/Immediate 路径的 `HttpResponse` 保留栈对象（move 到 shared_ptr 仅
+  发生在 Stream 模式下），避免快路径每请求一次堆分配。
+
+### 性能优化过程
+
+writev 首版 ab 测试只有 24k req/s（buffered 285k 的 1/10）。根因：
+每次响应发两次 sync write（headers、body），触发 TCP Nagle + delayed-ACK，
+导致每个请求多出 40ms 停顿。
+
+两个修复合并落地：
+1. **headers coalesce**：首次 write/writev/write_chunk 把 headers 合并进 iov
+   头部，一次 writev 发完。
+2. **TCP_NODELAY**：accept 后在 socket 上开 NODELAY。HTTP 响应本就无需 Nagle
+   batching，关掉避免 delayed-ACK 陷阱。
+
+### 性能回归
+
+ab `-n 100000 -c 1000 -k` 三次均值（相对 Phase 2 ~287k）：
+
+| 路径 | req/s | vs 基线 |
+|---|---|---|
+| Buffered `/hello` | 285k（287/285/282） | 持平 |
+| Immediate writev `/weave/:name` | 276k（271/280/278） | 首次支持，仅低 3% |
+
+流式场景验证：2 个 io 线程 + 5 个并发 SSE 流（每个 2 秒），100 个快 `/hello`
+请求 0.292s 全部完成（~3ms/req）。io 线程未被流式阻塞。
+
+### 新增测试
+
+- `test/response_test.cpp`：8 个用例，FakeStream 验证 headers coalesce、
+  writev 零拷贝、chunked、SSE 格式。
+- 全部 35 个测试通过。
+
+### API 变化（Photon 迁移侧需对齐）
+
+- `resp.set_result(int)` → `resp.set_status(int)`
+- `resp.headers.insert(k, v)` → `resp.headers().insert(k, v)`（函数括号）
+- `resp.headers.content_length(n)` → `resp.headers().content_length(n)`
+- `resp.write(buf, n)` / `resp.writev(iov, n)` — 签名兼容
+- 流式场景：Photon 的 `photon::thread_create` → `resp.stream([](HttpResponse&){...})`
+
+---
+
 ## 2026-04-17 Phase 2：内置 Router、合并 http_common、完善 body 读取
 
 ### 本次改动（Phase 2）
