@@ -1,0 +1,36 @@
+#pragma once
+
+#include <cstddef>
+#include <memory>
+
+namespace httpserver {
+
+class HttpHandler;
+
+class HttpServer {
+public:
+    // port: TCP port to listen on.
+    // io_threads: size of io_context thread pool; 0 means hardware_concurrency().
+    explicit HttpServer(unsigned short port, std::size_t io_threads = 0);
+    ~HttpServer();
+
+    HttpServer(const HttpServer&) = delete;
+    HttpServer& operator=(const HttpServer&) = delete;
+
+    // Register the single root handler. Handler lifetime is caller-managed
+    // and must outlive run().
+    void set_handler(HttpHandler* handler);
+
+    // Blocks until SIGINT / SIGTERM / SIGTSTP is received. Returns 0 on
+    // clean shutdown, non-zero on startup failure.
+    int run();
+
+    // Request a shutdown from another thread.
+    void stop();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+}  // namespace httpserver

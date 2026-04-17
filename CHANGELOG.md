@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-04-17 Phase 1：核心骨架重构（PhotonLibOS 迁移）
+
+### 背景
+
+迁移周边项目（`http_common` / `route` / `weave++` / `simple_http_template`）
+从 PhotonLibOS 到本项目。详见 `DESIGN.md`。
+
+### 本次改动（Phase 1）
+
+- 删除 `RoutingModule` / `BaseRequestHandler` 旧路由体系
+- 重新布局：`include/httpserver/` 为公共头文件，`src/` 为实现
+- 全部代码置于 `httpserver` 命名空间
+- 新增 `HttpHandler` 抽象基类（单方法 `handle(req, resp)`）
+- 新增 `HttpServer` 外观类（pimpl；构造 `(port, io_threads=0)`；`run()` 内置
+  SIGINT/SIGTERM/SIGTSTP 信号处理）
+- 重构 `HttpRequest`：`method()` / `path()` / `header()` / `query()` / `body()`
+  返回 `string_view`；header 查询大小写不敏感；补齐 PATCH/HEAD 方法
+- 重构 `HttpResponse`（Buffered 模式）：`set_status(int)` 自动映射 reason phrase；
+  `headers().insert/content_length/content_type` 链式 API
+- `Connection` 改为接 `HttpHandler&` 直接分发
+- `makefile` → `CMakeLists.txt`，导出 `httpserver::httpserver` target
+- `DEBUG_LOG` → `HTTPSERVER_LOG`（避免宏名与用户冲突）
+- 新增 `test/hello_world.cpp` 作为冒烟测试与压测目标
+
+### 压测回归
+
+`ab -n 100000 -c 1000 -k`，3 次运行：
+
+| 指标 | 2026-02-18 基线 | Phase 1 结果 |
+|---|---|---|
+| Requests/sec | 313,234 | 274k / 285k / 293k（均 ~284k） |
+| Failed requests | 0 | 0 |
+| Keep-Alive requests | 100,000 | 100,000 |
+
+约 9% 吞吐下滑，在设计文档允许的 10% 范围内。下滑来自新抽象
+（虚函数分发、Headers 线性查找等）。留待 Phase 3 评估是否值得优化。
+
+---
+
 ## 2026-02-18 修复多线程 keep-alive 压测下请求解析失败
 
 ### 问题现象

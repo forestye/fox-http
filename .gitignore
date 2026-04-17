@@ -1,6 +1,4 @@
 .vscode/
+build/
 *.o
-routing_module_test
-server_test
-simple_server_test
-
+*.a
