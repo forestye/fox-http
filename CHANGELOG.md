@@ -4,6 +4,54 @@
 
 ---
 
+## 2026-04-18 Phase 4：周边项目迁移
+
+从 PhotonLibOS 栈迁移到 httpserver。原项目保持不动；建立了三个平行的 `_hs` 副本：
+
+- `/home/yelin/code/route_hs`：CRDL 路由代码生成器。`src/code_generator.cpp`
+  重写了模板字符串：生成的 `Router` 继承 `httpserver::HttpHandler`，`handle()`
+  接受 `HttpRequest&` / `HttpResponse&`；`Verb` → `HttpRequest::Method`；
+  `resp.set_result` → `resp.set_status`；`resp.headers.insert` → `resp.headers().insert`；
+  `req.verb()/req.target()/req.read()` → `req.method()/req.path()/req.body()`；
+  `ANY` 方法展开为 7 种 HTTP 方法的重复注册；
+  FILESYSTEM 路由改为生成内联简单文件服务器（`std::filesystem` + `std::ifstream`
+  + 扩展名到 Content-Type 映射），不再依赖 Photon 文件系统。
+- `/home/yelin/code/weave++_hs`：HTML 模板生成器。三个 wrapper 方法的 includes
+  和 using 全部切到 httpserver；`ResponseObject&` → `HttpResponse&`；
+  `resp.set_result` → `resp.set_status`；`resp.headers.*` → `resp.headers().*`；
+  `LOG_ERROR` → `std::cerr`。`writev` / iovec 语义不变，weave++ 的零拷贝设计
+  完整保留。
+- `/home/yelin/code/simple_http_template_hs`：端到端示例。CMakeLists
+  `add_subdirectory(../httpserver)`，`find_program` 定位 `crdl_compiler`/
+  `crdl_func`/`weave++` 于相邻 `_hs` 项目的 build 目录。`test.cpp` 用
+  `httpserver::HttpServer` 替换 `PhotonHttpServer`，DB init 改为非致命
+  以便无 MySQL 环境下仍可跑起来。`handlers.cpp` 全部用新 Response API；
+  `favicon` 改用 `std::ifstream` 读文件。`routes.crdl` 把 `string` 返回类型
+  改为 `text`（CRDL 语法只支持 `text`/`html`/`json`）。
+
+### 端到端验证
+
+`simple_http_template_hs` 起服务后 curl 通过：
+
+| 路由 | 结果 |
+|---|---|
+| `GET /hello` | 200，writev 模板字符串 |
+| `GET /` | 200，weave++ 生成的 index.html 渲染 |
+| `GET /user/42` | 400（DB 未初始化，环境问题；代码路径正确） |
+| `POST /login` | 200 + Set-Cookie（好凭证）/ 401（坏凭证） |
+| `GET /test/string` | 200，text return-type 路由 |
+| `GET /test/string/42` | `int:id` 参数注入 |
+| `GET /test/alpha/string/7` | 多参数（string + int）注入 |
+| `GET /css/styles.css` | 200，FILESYSTEM 路由读本地文件 |
+| `GET /nonexistent` | 404 |
+
+### 设计原则回顾（与 DESIGN.md 对齐）
+
+周边项目改动只发生在副本中，原 Photon 链路完整保留；httpserver 本身未
+因迁移产生新代码改动——新 API 已在 Phase 1-3 完成。
+
+---
+
 ## 2026-04-17 Phase 3：流式响应（writev 零拷贝 + stream lambda + SSE/chunked）
 
 ### 本次改动（Phase 3）
