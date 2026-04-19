@@ -4,7 +4,7 @@
 #include "logger.h"
 #include "server_status.h"
 
-namespace httpserver {
+namespace fox::http {
 
 void TimerManager::init(boost::asio::io_context& io_context, std::chrono::seconds interval) {
     interval_ = interval;
@@ -42,7 +42,7 @@ void TimerManager::check_idle_connections() {
             if (auto conn = it->second.lock()) {
                 if (!conn->is_processing() && conn->is_idle()) {
                     conn->cancel();
-                    HTTPSERVER_LOG("connection timeout: " << conn->id());
+                    FOX_HTTP_LOG("connection timeout: " << conn->id());
                     ServerStatus::instance().increment_connection_timeout_count();
                 }
                 ++it;
@@ -55,4 +55,4 @@ void TimerManager::check_idle_connections() {
     start();
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

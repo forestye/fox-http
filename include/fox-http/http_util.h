@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <unordered_map>
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpResponse;
 
@@ -39,4 +39,4 @@ void not_found(HttpResponse& resp, std::string_view message = "not found");
 void internal_error(HttpResponse& resp, std::string_view message = "internal server error");
 
 }  // namespace util
-}  // namespace httpserver
+}  // namespace fox::http

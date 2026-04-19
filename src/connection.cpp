@@ -1,8 +1,8 @@
 #include "connection.h"
 
-#include "httpserver/http_handler.h"
-#include "httpserver/http_request.h"
-#include "httpserver/http_response.h"
+#include "fox-http/http_handler.h"
+#include "fox-http/http_request.h"
+#include "fox-http/http_response.h"
 #include "logger.h"
 #include "server_status.h"
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace httpserver {
+namespace fox::http {
 
 namespace asio = boost::asio;
 using asio::ip::tcp;
@@ -68,7 +68,7 @@ void Connection::start() {
     boost::system::error_code ec;
     socket_.set_option(tcp::no_delay(true), ec);
     if (ec) {
-        HTTPSERVER_LOG("Connection(" << id() << ") set TCP_NODELAY failed: "
+        FOX_HTTP_LOG("Connection(" << id() << ") set TCP_NODELAY failed: "
                        << ec.message());
     }
     read();
@@ -99,7 +99,7 @@ void Connection::read() {
                 if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
                     socket_.close();
                 } else {
-                    HTTPSERVER_LOG("Connection(" << id() << ")::read() - Error: " << ec.message());
+                    FOX_HTTP_LOG("Connection(" << id() << ")::read() - Error: " << ec.message());
                 }
                 return;
             }
@@ -113,7 +113,7 @@ void Connection::read() {
 
             auto request = std::make_shared<HttpRequest>();
             if (!request->parse_header(header_data)) {
-                HTTPSERVER_LOG("Connection(" << id() << ")::read() - malformed header");
+                FOX_HTTP_LOG("Connection(" << id() << ")::read() - malformed header");
                 socket_.close();
                 return;
             }
@@ -157,7 +157,7 @@ void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t bod
         [this, self, request, body_ptr](const boost::system::error_code& ec, std::size_t /*n*/) {
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
-                HTTPSERVER_LOG("Connection(" << id() << ")::read_body() - Error: " << ec.message());
+                FOX_HTTP_LOG("Connection(" << id() << ")::read_body() - Error: " << ec.message());
                 socket_.close();
                 return;
             }
@@ -200,7 +200,7 @@ void Connection::dispatch(std::shared_ptr<HttpRequest> request) {
     }
 
     if (caught) {
-        HTTPSERVER_LOG("handler threw: " << caught_msg);
+        FOX_HTTP_LOG("handler threw: " << caught_msg);
         if (!response.headers_flushed()) {
             replace_with_500(response, caught_msg);
             write_buffered(response);
@@ -259,7 +259,7 @@ void Connection::write_buffered(HttpResponse& response) {
         [this, self, payload](const boost::system::error_code& ec, std::size_t /*n*/) {
             is_processing_.store(false, std::memory_order_relaxed);
             if (ec) {
-                HTTPSERVER_LOG("Connection(" << id() << ")::write_buffered() - "
+                FOX_HTTP_LOG("Connection(" << id() << ")::write_buffered() - "
                                << ec.message());
                 return;
             }
@@ -291,7 +291,7 @@ void Connection::post_stream_work(std::shared_ptr<HttpRequest> request,
         }
 
         if (caught) {
-            HTTPSERVER_LOG("stream lambda threw: " << caught_msg);
+            FOX_HTTP_LOG("stream lambda threw: " << caught_msg);
             if (!response->headers_flushed()) {
                 // Headers not flushed yet — synthesize a 500 reply.
                 self->replace_with_500(*response, caught_msg);
@@ -321,4 +321,4 @@ void Connection::finish_request() {
     }
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

@@ -1,6 +1,6 @@
-#include "httpserver/http_router.h"
+#include "fox-http/http_router.h"
 
-#include "httpserver/http_response.h"
+#include "fox-http/http_response.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -8,7 +8,7 @@
 #include <string_view>
 #include <utility>
 
-namespace httpserver {
+namespace fox::http {
 
 std::size_t HttpRouter::literal_prefix_length(const std::vector<Segment>& segs) {
     std::size_t n = 0;
@@ -291,4 +291,4 @@ void HttpRouter::handle(HttpRequest& req, HttpResponse& resp) {
     not_found_handler_(req, resp);
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

@@ -3,7 +3,7 @@
 #include <mutex>
 #include <string>
 
-namespace httpserver {
+namespace fox::http {
 
 // Internal server statistics: connection counts, timeouts, peaks.
 // Singleton accessed via instance(). Thread-safe.
@@ -60,4 +60,4 @@ private:
     int connection_timeout_count_ = 0;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

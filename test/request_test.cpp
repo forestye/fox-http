@@ -1,8 +1,8 @@
-#include "httpserver/http_request.h"
+#include "fox-http/http_request.h"
 
 #include <gtest/gtest.h>
 
-using namespace httpserver;
+using namespace fox::http;
 
 TEST(Request, BasicGet) {
     HttpRequest r;

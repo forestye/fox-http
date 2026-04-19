@@ -8,7 +8,7 @@
 #include <memory>
 #include <string_view>
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpHandler;
 class HttpRequest;
@@ -57,4 +57,4 @@ private:
     static constexpr std::chrono::seconds kIdleTimeout{30};
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

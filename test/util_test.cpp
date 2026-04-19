@@ -1,12 +1,12 @@
-#include "httpserver/http_response.h"
-#include "httpserver/http_util.h"
+#include "fox-http/http_response.h"
+#include "fox-http/http_util.h"
 
 #include <gtest/gtest.h>
 
-using namespace httpserver;
-using httpserver::util::parse_form_urlencoded;
-using httpserver::util::stringify;
-using httpserver::util::url_decode;
+using namespace fox::http;
+using fox::http::util::parse_form_urlencoded;
+using fox::http::util::stringify;
+using fox::http::util::url_decode;
 
 TEST(UrlDecode, PassThrough) {
     EXPECT_EQ(url_decode("hello"), "hello");

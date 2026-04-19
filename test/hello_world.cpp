@@ -1,9 +1,9 @@
-#include "httpserver/http_handler.h"
-#include "httpserver/http_request.h"
-#include "httpserver/http_response.h"
-#include "httpserver/http_router.h"
-#include "httpserver/http_server.h"
-#include "httpserver/http_util.h"
+#include "fox-http/http_handler.h"
+#include "fox-http/http_request.h"
+#include "fox-http/http_response.h"
+#include "fox-http/http_router.h"
+#include "fox-http/http_server.h"
+#include "fox-http/http_util.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -13,7 +13,7 @@
 #include <sys/uio.h>
 #include <thread>
 
-using namespace httpserver;
+using namespace fox::http;
 
 int main(int argc, char* argv[]) {
     unsigned short port = 8080;

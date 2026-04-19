@@ -7,7 +7,7 @@
 #include <sys/uio.h>  // iovec
 #include <vector>
 
-namespace httpserver {
+namespace fox::http {
 
 class ResponseStream;  // internal interface defined in src/response_stream.h
 
@@ -137,4 +137,4 @@ private:
     std::string header_block_cache_;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

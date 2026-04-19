@@ -1,4 +1,4 @@
-#include "httpserver/http_response.h"
+#include "fox-http/http_response.h"
 
 #include "response_stream.h"
 
@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <string>
 
-namespace httpserver {
+namespace fox::http {
 
 namespace {
 
@@ -306,4 +306,4 @@ std::string HttpResponse::serialize() const {
     return out;
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

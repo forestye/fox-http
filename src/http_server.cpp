@@ -1,7 +1,7 @@
-#include "httpserver/http_server.h"
+#include "fox-http/http_server.h"
 
 #include "connection.h"
-#include "httpserver/http_handler.h"
+#include "fox-http/http_handler.h"
 #include "logger.h"
 #include "response_stream.h"
 #include "timer_manager.h"
@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-namespace httpserver {
+namespace fox::http {
 
 namespace asio = boost::asio;
 using asio::ip::tcp;
@@ -34,14 +34,14 @@ struct HttpServer::Impl : StreamDispatcher {
             if (n == 0) n = 4 * std::thread::hardware_concurrency();
             if (n == 0) n = 4;
             stream_pool_ = std::make_unique<asio::thread_pool>(n);
-            HTTPSERVER_LOG("handler thread pool started with " << n << " threads");
+            FOX_HTTP_LOG("handler thread pool started with " << n << " threads");
         });
         asio::post(*stream_pool_, std::move(fn));
     }
 
     int run() {
         if (!handler_) {
-            HTTPSERVER_LOG("HttpServer::run() - no handler set");
+            FOX_HTTP_LOG("HttpServer::run() - no handler set");
             return 1;
         }
 
@@ -59,7 +59,7 @@ struct HttpServer::Impl : StreamDispatcher {
 
         std::vector<std::thread> pool;
         pool.reserve(io_threads_);
-        HTTPSERVER_LOG("HttpServer listening on port " << port_
+        FOX_HTTP_LOG("HttpServer listening on port " << port_
                        << " with " << io_threads_ << " io threads");
         for (std::size_t i = 0; i < io_threads_; ++i) {
             pool.emplace_back([this]() { io_context_.run(); });
@@ -126,4 +126,4 @@ void HttpServer::stop() {
     impl_->stop();
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

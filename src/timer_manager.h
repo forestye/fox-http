@@ -6,7 +6,7 @@
 #include <mutex>
 #include <unordered_map>
 
-namespace httpserver {
+namespace fox::http {
 
 class Connection;
 
@@ -39,4 +39,4 @@ private:
     std::mutex mutex_;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

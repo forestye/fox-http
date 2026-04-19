@@ -1,4 +1,4 @@
-#include "httpserver/http_response.h"
+#include "fox-http/http_response.h"
 #include "../src/response_stream.h"
 
 #include <gtest/gtest.h>
@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-using namespace httpserver;
+using namespace fox::http;
 
 namespace {
 

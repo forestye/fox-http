@@ -2,7 +2,7 @@
 
 #include <sstream>
 
-namespace httpserver {
+namespace fox::http {
 
 std::string ServerStatus::status_str() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -15,4 +15,4 @@ std::string ServerStatus::status_str() const {
     return ss.str();
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

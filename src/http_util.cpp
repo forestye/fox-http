@@ -1,10 +1,10 @@
-#include "httpserver/http_util.h"
+#include "fox-http/http_util.h"
 
-#include "httpserver/http_response.h"
+#include "fox-http/http_response.h"
 
 #include <charconv>
 
-namespace httpserver::util {
+namespace fox::http::util {
 
 std::string url_decode(std::string_view s) {
     std::string out;
@@ -70,4 +70,4 @@ void internal_error(HttpResponse& resp, std::string_view message) {
     write_plain_error(resp, 500, message);
 }
 
-}  // namespace httpserver::util
+}  // namespace fox::http::util

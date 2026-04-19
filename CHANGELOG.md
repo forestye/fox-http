@@ -4,6 +4,47 @@
 
 ---
 
+## 2026-04-19 重命名为 fox-http
+
+从 `httpserver` 改名为 `fox-http`，周边项目同步为 `fox-route`（原 `route_hs`）
+和 `fox-page`（原 `weave++_hs`）。
+
+### 改动范围
+
+- **项目目录**：`httpserver/` → `fox-http/`（git remote 暂未改，仍指向
+  `gitrepo/httpserver.git`；服务端裸仓可稍后重命名）
+- **头文件目录**：`include/httpserver/` → `include/fox-http/`
+- **Include 路径**：`#include "httpserver/..."` → `#include "fox-http/..."`
+- **C++ 命名空间**：`httpserver::` → `fox::http::`（C++17 嵌套）
+  - 理由：与 `boost::asio` / `absl` 风格一致；未来 `fox-route`、`fox-page` 若
+    需要运行时代码可共用 `fox::` 根
+- **宏**：`HTTPSERVER_LOG` → `FOX_HTTP_LOG`；`HTTPSERVER_DEBUG_LOG` →
+  `FOX_HTTP_DEBUG_LOG`；`HTTPSERVER_BUILD_TESTS` → `FOX_HTTP_BUILD_TESTS`
+- **CMake**：
+  - `project(httpserver)` → `project(fox-http)`
+  - target + alias：`httpserver::httpserver` → `fox-http::fox-http`
+  - 静态库：`libhttpserver.a` → `libfox-http.a`
+  - 导出配置：`httpserverTargets.cmake` → `fox-httpTargets.cmake`，
+    `cmake/httpserver` → `cmake/fox-http`，`NAMESPACE fox-http::`
+
+### 验证
+
+- 35/35 单元测试 0 回归
+- `hello_world` 可执行文件所有路由（buffered / writev / stream / SSE / /boom
+  异常 / 404）curl 通过
+- 周边 `fox-route` 生成的代码 include `"fox-http/..."`、使用 `fox::http::`
+  命名空间，smoke-compile 对 `libfox-http.a` 链接通过
+- 周边 `fox-page` 生成的代码同上，smoke-compile 通过
+- `simple_http_template_hs` 端到端 curl 通过（`/hello` / `/` / `/test/string/42`
+  / `/css/styles.css` 全部 200）
+
+### 历史保留
+
+DESIGN.md / CHANGELOG.md 中历史条目仍以原名 `httpserver` 描述，
+用于追溯演化；新条目使用 `fox-http`。
+
+---
+
 ## 2026-04-19 Phase 5 收尾：handler 异常安全
 
 ### 背景

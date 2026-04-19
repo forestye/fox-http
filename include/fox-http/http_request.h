@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpRequest {
 public:
@@ -71,4 +71,4 @@ private:
     std::map<std::string, std::string> path_params_;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

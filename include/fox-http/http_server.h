@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <memory>
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpHandler;
 
@@ -38,4 +38,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

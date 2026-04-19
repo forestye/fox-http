@@ -1,4 +1,4 @@
-#include "httpserver/http_request.h"
+#include "fox-http/http_request.h"
 
 #include <algorithm>
 #include <cctype>
@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace httpserver {
+namespace fox::http {
 
 namespace {
 
@@ -202,4 +202,4 @@ std::size_t HttpRequest::content_length() const {
     return n;
 }
 
-}  // namespace httpserver
+}  // namespace fox::http

@@ -1,10 +1,10 @@
-#include "httpserver/http_request.h"
-#include "httpserver/http_response.h"
-#include "httpserver/http_router.h"
+#include "fox-http/http_request.h"
+#include "fox-http/http_response.h"
+#include "fox-http/http_router.h"
 
 #include <gtest/gtest.h>
 
-using namespace httpserver;
+using namespace fox::http;
 
 namespace {
 

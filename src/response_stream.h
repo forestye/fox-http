@@ -4,7 +4,7 @@
 #include <functional>
 #include <sys/uio.h>  // iovec
 
-namespace httpserver {
+namespace fox::http {
 
 // Internal abstraction for synchronous response writing. Implemented by
 // Connection via a boost::asio::socket wrapper. Kept as a pure interface so
@@ -27,4 +27,4 @@ public:
     virtual void post(std::function<void()> fn) = 0;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpRequest;
 class HttpResponse;
@@ -12,4 +12,4 @@ public:
     virtual void handle(HttpRequest& req, HttpResponse& resp) = 0;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http

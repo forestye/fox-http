@@ -1,7 +1,7 @@
 #pragma once
 
-#include "httpserver/http_handler.h"
-#include "httpserver/http_request.h"
+#include "fox-http/http_handler.h"
+#include "fox-http/http_request.h"
 
 #include <functional>
 #include <string>
@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace httpserver {
+namespace fox::http {
 
 class HttpResponse;
 
@@ -98,4 +98,4 @@ private:
     std::string allowed_methods_for(std::string_view path) const;
 };
 
-}  // namespace httpserver
+}  // namespace fox::http
