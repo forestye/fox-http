@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <sys/uio.h>
 #include <thread>
@@ -71,6 +72,12 @@ int main(int argc, char* argv[]) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         });
+    });
+
+    // Throwing handler — verifies exception safety (Connection catches and
+    // replies 500 when the handler throws before flushing headers).
+    router.get("/boom", [](HttpRequest&, HttpResponse&) {
+        throw std::runtime_error("kaboom");
     });
 
     // Stream mode — Server-Sent Events.

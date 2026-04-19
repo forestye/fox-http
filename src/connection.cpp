@@ -183,7 +183,34 @@ void Connection::dispatch(std::shared_ptr<HttpRequest> request) {
     }
     response.headers().insert("Connection", keep_alive_ ? "keep-alive" : "close");
 
-    handler_.handle(*request, response);
+    // Exception safety: a throwing handler must not propagate out to the
+    // io_context — that would crash the io thread. If the handler throws
+    // before flushing headers we still have the opportunity to produce a
+    // 500; otherwise we log and close the connection.
+    std::string caught_msg;
+    bool caught = false;
+    try {
+        handler_.handle(*request, response);
+    } catch (const std::exception& e) {
+        caught = true;
+        caught_msg = e.what();
+    } catch (...) {
+        caught = true;
+        caught_msg = "unknown exception";
+    }
+
+    if (caught) {
+        HTTPSERVER_LOG("handler threw: " << caught_msg);
+        if (!response.headers_flushed()) {
+            replace_with_500(response, caught_msg);
+            write_buffered(response);
+        } else {
+            // Headers already on the wire — nothing clean we can do, close.
+            keep_alive_ = false;
+            finish_request();
+        }
+        return;
+    }
 
     switch (response.mode()) {
         case HttpResponse::Mode::Buffered:
@@ -207,6 +234,22 @@ void Connection::dispatch(std::shared_ptr<HttpRequest> request) {
             return;
         }
     }
+}
+
+void Connection::replace_with_500(HttpResponse& response, std::string_view msg) {
+    // Rebuild the response from scratch. Headers haven't been sent yet.
+    response = HttpResponse{};
+    response.attach_stream(socket_stream_.get());
+    response.set_status(500);
+    response.headers().content_type("text/plain; charset=utf-8");
+    response.headers().insert("Connection", "close");
+    std::string body = "500 Internal Server Error\n";
+    if (!msg.empty()) {
+        body.append(msg);
+        body.push_back('\n');
+    }
+    response.set_body(std::move(body));
+    keep_alive_ = false;
 }
 
 void Connection::write_buffered(HttpResponse& response) {
@@ -233,9 +276,33 @@ void Connection::post_stream_work(std::shared_ptr<HttpRequest> request,
                                   std::shared_ptr<HttpResponse> response) {
     auto self(shared_from_this());
     dispatcher_.post([self, request, response]() {
-        auto& fn = response->stream_fn();
-        if (fn) fn(*response);
-        response->end_chunks();
+        std::string caught_msg;
+        bool caught = false;
+        try {
+            auto& fn = response->stream_fn();
+            if (fn) fn(*response);
+            response->end_chunks();
+        } catch (const std::exception& e) {
+            caught = true;
+            caught_msg = e.what();
+        } catch (...) {
+            caught = true;
+            caught_msg = "unknown exception";
+        }
+
+        if (caught) {
+            HTTPSERVER_LOG("stream lambda threw: " << caught_msg);
+            if (!response->headers_flushed()) {
+                // Headers not flushed yet — synthesize a 500 reply.
+                self->replace_with_500(*response, caught_msg);
+                // We're on a handler-pool thread; send synchronously via the
+                // attached stream to keep the logic simple.
+                auto payload = response->serialize();
+                response->attach_stream(self->socket_stream_.get());
+                self->socket_stream_->write(payload.data(), payload.size());
+            }
+            self->keep_alive_ = false;
+        }
 
         self->socket_.get_executor().execute([self]() {
             self->finish_request();

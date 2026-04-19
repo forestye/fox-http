@@ -561,13 +561,23 @@ httpserver/
 
 ## 11. 未决事项（开坑区）
 
-1. **动态路由参数暴露**：通过 `req.param("id")` 专门接口，还是复用 `req.query("id")`？倾向前者（语义清晰——query 是 URL query string，param 是路由段）。
-2. **chunked 请求体**：本次不支持，未来需要做 Transfer-Encoding: chunked 的请求体解析。
-3. **HTTP/2 / HTTPS**：本次不做。**为什么**：HTTP/1.1 覆盖 95% 内部场景；HTTPS 建议让反向代理（nginx/caddy）处理，避免把 OpenSSL 依赖引进来。
-4. **handler 线程池默认大小**：默认 `4 × hw_conc`？还是固定 64？按 LLM 流规模决定，留配置项。
-5. **错误处理**：handler 抛异常怎么办？目前倾向 catch 后回 500，避免连接崩掉。
-6. **日志**：保留 `DEBUG_LOG` 宏？还是接入更正式的 logger（spdlog 等）？暂保留现状——接 spdlog 会引入新依赖，当前 `DEBUG_LOG` 足够。
-7. **项目名**：暂不改，后续确认。
+**当前状态（2026-04-19）：核心未决项已解决或明确搁置。**
+
+已解决（实现在各 Phase，条目保留供追溯）：
+- ~~动态路由参数暴露~~ → Phase 2：`req.param("id")` 接口
+- ~~handler 线程池默认大小~~ → Phase 3：`4 × hw_concurrency`，可通过 `set_stream_pool_size()` 配置
+- ~~handler 抛异常~~ → Phase 5：Connection 在 dispatch 和 stream lambda 处都
+  加了 try/catch。头未发时改写为 500 + 异常消息；头已发时 log + 关连接。
+  io 线程不会因 handler 崩溃。
+
+明确搁置，不计划短期实现：
+- **chunked 请求体**：当前 Connection 只按 Content-Length eager 读 body，不支持
+  `Transfer-Encoding: chunked` 请求体。周边工具无此需求；实现需改 Connection
+  状态机（多段循环读）。如有需求再开。
+- **HTTP/2 / HTTPS**：HTTP/1.1 覆盖主要内部场景；HTTPS 建议由反向代理
+  （nginx / caddy）承担，避免 OpenSSL 依赖。
+- **日志系统**：当前 `HTTPSERVER_LOG` 宏足够；接 spdlog 会引入依赖，暂不做。
+- **项目名**：仍叫 `httpserver`，待命名灵感。
 
 ---
 
@@ -584,6 +594,7 @@ httpserver/
 | 2026-04-16 | 换用 CMake | 周边项目已是 CMake；find_package 依赖传播比 make 可靠 |
 | 2026-04-16 | 项目名暂不改 | 未想好；重构中途改名是无意义扰动 |
 | 2026-04-16 | `HttpResponse` 三模式：Buffered / Immediate(writev) / Stream(lambda) | 三种场景需求冲突，统一模型只能牺牲两个；三模式互斥 fail fast 避免误用 |
+| 2026-04-19 | Handler 抛异常 → Connection catch 后回 500 | io 线程异常传播会崩溃进程；头未发时 500 可清洁替换，头已发时只能 close |
 | 2026-04-16 | Stream 用 lambda 而非 coroutine | C++20 协程依赖太重；lambda 方案同 handler 内可混用流式/非流式 |
 | 2026-04-16 | Request body eager 读取，暂不支持流式上传 | 周边工具无此需求；流式上传需重构 Connection 状态机 |
 | 2026-04-16 | Header 查询改为大小写不敏感 | RFC 7230 规定；当前 `std::map` 实现是 bug 级别 corner case |

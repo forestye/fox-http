@@ -6,6 +6,7 @@
 #include <boost/asio.hpp>
 #include <chrono>
 #include <memory>
+#include <string_view>
 
 namespace httpserver {
 
@@ -39,6 +40,7 @@ private:
                           std::shared_ptr<HttpResponse> response);
     void finish_request();
     void write_buffered(HttpResponse& response);
+    void replace_with_500(HttpResponse& response, std::string_view msg);
 
     boost::asio::ip::tcp::socket socket_;
     boost::asio::streambuf request_buffer_;

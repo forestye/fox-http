@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-04-19 Phase 5 收尾：handler 异常安全
+
+### 背景
+
+DESIGN.md §11 列为未决事项之一："handler 抛异常怎么办？目前倾向 catch 后回
+500。" 在此之前 handler 抛出未捕获异常会沿 Boost.Asio 回调栈传播，崩掉 io 线程。
+
+### 改动
+
+`src/connection.cpp`：
+- `dispatch()` 里 `handler_.handle(*request, response)` 外围 try/catch
+  （捕获 `std::exception` 和 `...`）。若头未发，调用新增 `replace_with_500()`
+  清空 response 并写 500 + 异常消息；若头已发，log + 关连接。
+- `post_stream_work()` 里 stream lambda 调用 + `end_chunks()` 整体外围 try/catch。
+  头未发时在 handler 线程上同步发 500 响应，然后 finish。
+- `replace_with_500()`：rebuild response with 500 status + text/plain body +
+  Connection: close，用于异常兜底。
+
+### 验证
+
+- 新增路由 `GET /boom` 在 `test/hello_world.cpp`，handler 直接 `throw std::runtime_error("kaboom")`。
+- curl `GET /boom` 返回 `500 Internal Server Error\nkaboom\n`。
+- 连续 5 次 `/boom` 后 `/hello` 仍返回 200，io 线程池未崩。
+- 35/35 现有单元测试无回归。
+
+### 同步更新
+
+- `DESIGN.md §11` 清理：已解决项（动态路由 param、handler 池大小、异常处理）
+  标记解决；明确搁置项（chunked 请求体、HTTP/2/HTTPS、日志、项目名）列出理由。
+- `DESIGN.md §12` 加一条异常处理决策记录。
+
+---
+
 ## 2026-04-18 Phase 4：周边项目迁移
 
 从 PhotonLibOS 栈迁移到 httpserver。原项目保持不动；建立了三个平行的 `_hs` 副本：
