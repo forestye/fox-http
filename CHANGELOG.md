@@ -4,6 +4,60 @@
 
 ---
 
+## 2026-04-20 并列压测：PhotonLibOS vs fox-http
+
+### 背景
+
+Phase 5 任务 17（DESIGN.md §9）：把迁移前（Photon 栈）和迁移后（fox-http）
+同工作负载的性能数字落到文档里。之前每个 Phase 内都做了 fox-http 自身的
+ab 回归，但没做原 Photon 的对照。
+
+### 方法
+
+- 同机（i9-12900，12 cores），两边都 Release（`-O3 -DNDEBUG`）
+- 每响应 `HTTP/1.1 200` + 6 字节 body，默认线程数 = hardware_concurrency = 12
+- `ab -n 100000 -c 1000 -k` 各跑 3 次，取中位数/均值
+
+### 结果
+
+| 实现 | req/s（均值） | p99 | CPU | failed |
+|---|---|---|---|---|
+| PhotonLibOS | 86k | 23-31 ms | ~52% | 0 |
+| fox-http Buffered | 283k | 10-13 ms | ~25% | 0 |
+| fox-http Immediate writev | 285k | 11-12 ms | ~25% | 0 |
+
+- fox-http 吞吐为 Photon 的 **~3.3×**
+- CPU 效率为 Photon 的 **~6×**（半负载跑出 3× 吞吐）
+- 延迟 p99 低 **~2-3×**
+- Photon 多次运行吞吐逐步下降（96→86→76k），fox-http 稳定（276-291k）
+
+### 归因（推测）
+
+- fox-http：Boost.Asio epoll + 线程池，每请求零协程切换
+- fox-http Immediate 模式：headers coalesce 到首次 iov + TCP_NODELAY，
+  1 次 writev 发完整响应
+- Photon：fiber + 用户态调度，每请求多一次协程切换；fiber 栈在高并发
+  下有内存/缓存压力
+
+### 同步更新
+
+- `DESIGN.md §10` 从"设计期目标"改写为"目标 + 并列压测结果 + 阶段演进"
+  三节，记录上述数字和归因。
+- 修正预期：DESIGN 原本假设"换架构允许 10% 吞吐下滑"，实际提升 3×——
+  10% 预算始终未触底。
+
+### 附带发现
+
+过去 Phase 1-4 的 ab 压测（~285k）都没显式 `-DCMAKE_BUILD_TYPE=Release`——
+`CMakeLists.txt` 的 `if(NOT CMAKE_BUILD_TYPE) set(Release)` 对配置期的
+cache 初值判断不对，实际拿到空字符串也会被认为"已设"。此次压测前重建时
+加了 `-DCMAKE_BUILD_TYPE=Release` 才命中 `-O3`。结果数字与之前一致
+（~285k），说明历史压测可能已经在 Release 了（或 -O3 对此工作负载影响有限），
+但值得警觉；后续若想精确对比，以 `CMakeCache.txt` 里的 `CMAKE_BUILD_TYPE:STRING`
+值为准。
+
+---
+
 ## 2026-04-19 重命名为 fox-http
 
 从 `httpserver` 改名为 `fox-http`，周边项目同步为 `fox-route`（原 `route_hs`）
