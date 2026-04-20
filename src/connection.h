@@ -34,7 +34,17 @@ public:
 
 private:
     void read();
-    void read_body(std::shared_ptr<HttpRequest> request, std::size_t body_len);
+    void read_body(std::shared_ptr<HttpRequest> request);
+    void read_fixed_body(std::shared_ptr<HttpRequest> request, std::size_t body_len);
+    void read_chunked_body(std::shared_ptr<HttpRequest> request,
+                           std::shared_ptr<std::string> acc);
+    void read_chunk_data(std::shared_ptr<HttpRequest> request,
+                         std::shared_ptr<std::string> acc,
+                         std::size_t chunk_size);
+    void read_chunk_trailing_crlf(std::shared_ptr<HttpRequest> request,
+                                  std::shared_ptr<std::string> acc);
+    void read_chunk_trailers(std::shared_ptr<HttpRequest> request,
+                             std::shared_ptr<std::string> acc);
     void dispatch(std::shared_ptr<HttpRequest> request);
     void post_stream_work(std::shared_ptr<HttpRequest> request,
                           std::shared_ptr<HttpResponse> response);

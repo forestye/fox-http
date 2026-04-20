@@ -618,15 +618,17 @@ httpserver/
 - ~~handler 抛异常~~ → Phase 5：Connection 在 dispatch 和 stream lambda 处都
   加了 try/catch。头未发时改写为 500 + 异常消息；头已发时 log + 关连接。
   io 线程不会因 handler 崩溃。
+- ~~项目名~~ → 2026-04-19 重命名为 `fox-http`
+- ~~chunked 请求体~~ → 2026-04-20：Connection 识别 `Transfer-Encoding: chunked`
+  并走独立的异步状态机（size 行 → 数据 + CRLF → 下一 chunk；0-size 后 drop
+  trailer 直到空行）。对 handler 透明，`req.body()` 和 fixed-length 路径
+  完全一致。Python 集成测试覆盖单 chunk、多 chunk、chunk-extension、trailer、
+  空 body、5KB/18 chunk 大体，全部通过。
 
 明确搁置，不计划短期实现：
-- **chunked 请求体**：当前 Connection 只按 Content-Length eager 读 body，不支持
-  `Transfer-Encoding: chunked` 请求体。周边工具无此需求；实现需改 Connection
-  状态机（多段循环读）。如有需求再开。
 - **HTTP/2 / HTTPS**：HTTP/1.1 覆盖主要内部场景；HTTPS 建议由反向代理
   （nginx / caddy）承担，避免 OpenSSL 依赖。
-- **日志系统**：当前 `HTTPSERVER_LOG` 宏足够；接 spdlog 会引入依赖，暂不做。
-- **项目名**：仍叫 `httpserver`，待命名灵感。
+- **日志系统**：当前 `FOX_HTTP_LOG` 宏足够；接 spdlog 会引入依赖，暂不做。
 
 ---
 

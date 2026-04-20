@@ -4,6 +4,52 @@
 
 ---
 
+## 2026-04-20 支持 chunked 请求体
+
+### 背景
+
+DESIGN.md §11 里"chunked 请求体"原本列为明确搁置（Phase 1 只做了
+Content-Length eager 读）。用户预计很快会用到（比如流式上传、客户端发 LLM
+生成的 token），提前实现。
+
+### 改动
+
+`src/connection.{h,cpp}`：
+
+- `read_body()` 改为分发点：检查 `Transfer-Encoding` 中是否含 `chunked`
+  （大小写不敏感，允许多 coding 组合），含则走 chunked 状态机，否则走原
+  固定长度路径（`read_fixed_body`，即原 `read_body` 的主体）。
+- 新增三个异步状态：
+  - `read_chunked_body`：`async_read_until("\r\n")` 读 size 行，解析 hex
+    （忽略 `;chunk-ext`），分派到数据读或 trailer 读
+  - `read_chunk_data` + `read_chunk_trailing_crlf`：先从 streambuf drain
+    已有字节（避免新 syscall），不足部分 `async_read(transfer_exactly(n))`
+    直接读进 accumulator 的预分配位置
+  - `read_chunk_trailers`：0-size 后逐行读，遇空行结束，忽略实际 trailer
+    字段（HTTP/1.1 trailer 的使用场景不多）
+- handler 完全无感：`req.body()` 行为和 fixed-length 路径一致。
+
+### 验证
+
+新增 `test/integration/chunked_body_test.py` + ctest 集成（端口 18099）。
+覆盖：
+
+- 单 chunk
+- 多 chunk（小分片）
+- `chunk-ext`（如 `5;foo=bar\r\n...`）正确忽略
+- 大 body（5120 字节，18 chunks）
+- trailer header 正确 drop
+- 空 body（仅 `0\r\n\r\n`）
+
+6/6 集成测试通过，35 个 gtest 无回归；总 `ctest` 36/36。
+
+### 同步更新
+
+- DESIGN.md §11：`chunked 请求体` 从"明确搁置"区挪到"已解决"区，
+  并连带清理 `项目名` 条目（fox-http 已定名）。
+
+---
+
 ## 2026-04-20 并列压测：PhotonLibOS vs fox-http
 
 ### 背景

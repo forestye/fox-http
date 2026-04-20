@@ -84,6 +84,18 @@ if(FOX_HTTP_BUILD_TESTS)
     else()
         message(STATUS "GTest not found; skipping unit_tests target")
     endif()
+
+    # Integration test: chunked request body round-trip. Spins up hello_world
+    # on an ephemeral-ish port, runs the python client, tears down.
+    find_program(PYTHON3 python3)
+    if(PYTHON3 AND TARGET hello_world)
+        add_test(NAME ChunkedBodyIntegration
+            COMMAND ${CMAKE_COMMAND} -E env
+                HELLO_WORLD=$<TARGET_FILE:hello_world>
+                PYTHON=${PYTHON3}
+                sh -c "$<TARGET_FILE:hello_world> 18099 >/dev/null 2>&1 & SRV=$!; sleep 0.5; ${PYTHON3} ${CMAKE_CURRENT_SOURCE_DIR}/test/integration/chunked_body_test.py --port 18099; RC=$?; kill $SRV 2>/dev/null; exit $RC"
+        )
+    endif()
 endif()
 
 # ─── Install ─────────────────────────────────────────────────────

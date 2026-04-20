@@ -118,16 +118,36 @@ void Connection::read() {
                 return;
             }
 
-            std::size_t body_len = request->content_length();
-            if (body_len == 0) {
-                dispatch(std::move(request));
-                return;
-            }
-            read_body(std::move(request), body_len);
+            read_body(std::move(request));
         });
 }
 
-void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t body_len) {
+// Dispatch on Transfer-Encoding / Content-Length. Per RFC 7230, if both are
+// present, Transfer-Encoding wins (and some stacks even reject). We prefer
+// Transfer-Encoding: chunked when present.
+void Connection::read_body(std::shared_ptr<HttpRequest> request) {
+    auto te = request->header("Transfer-Encoding");
+    // Case-insensitive substring check for "chunked". RFC 7230 allows comma-
+    // separated codings; "chunked" must be the last one, but decoding works
+    // correctly regardless of position.
+    std::string te_lower(te);
+    for (auto& c : te_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    bool chunked = te_lower.find("chunked") != std::string::npos;
+    if (chunked) {
+        auto acc = std::make_shared<std::string>();
+        read_chunked_body(std::move(request), std::move(acc));
+        return;
+    }
+
+    std::size_t body_len = request->content_length();
+    if (body_len == 0) {
+        dispatch(std::move(request));
+        return;
+    }
+    read_fixed_body(std::move(request), body_len);
+}
+
+void Connection::read_fixed_body(std::shared_ptr<HttpRequest> request, std::size_t body_len) {
     // Drain any body bytes already in request_buffer_ from the async_read_until
     // overshoot.
     std::string body;
@@ -163,6 +183,147 @@ void Connection::read_body(std::shared_ptr<HttpRequest> request, std::size_t bod
             }
             request->set_body(std::move(*body_ptr));
             dispatch(request);
+        });
+}
+
+// ── chunked body state machine ──────────────────────────────────────
+//
+// HTTP/1.1 chunked transfer-encoding (RFC 7230 §4.1):
+//
+//   chunked-body   = *chunk
+//                    last-chunk
+//                    trailer-part
+//                    CRLF
+//   chunk          = chunk-size [ chunk-ext ] CRLF chunk-data CRLF
+//   last-chunk     = 1*("0") [ chunk-ext ] CRLF
+//   trailer-part   = *( header-field CRLF )
+//
+// We ignore chunk-ext and discard any trailer headers. acc accumulates the
+// concatenated chunk-data (no CRLFs).
+
+void Connection::read_chunked_body(std::shared_ptr<HttpRequest> request,
+                                   std::shared_ptr<std::string> acc) {
+    auto self(shared_from_this());
+    asio::async_read_until(socket_, request_buffer_, "\r\n",
+        [this, self, request, acc](const boost::system::error_code& ec, std::size_t n) {
+            if (ec) {
+                is_processing_.store(false, std::memory_order_relaxed);
+                FOX_HTTP_LOG("Connection(" << id() << ")::chunked size line - "
+                             << ec.message());
+                socket_.close();
+                return;
+            }
+
+            auto begin = asio::buffers_begin(request_buffer_.data());
+            std::string line(begin, begin + (n - 2));  // strip trailing \r\n
+            request_buffer_.consume(n);
+
+            // Strip chunk-extensions (";ext=...") and surrounding whitespace.
+            if (auto semi = line.find(';'); semi != std::string::npos) line.resize(semi);
+            while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back()))) line.pop_back();
+            while (!line.empty() && std::isspace(static_cast<unsigned char>(line.front()))) line.erase(line.begin());
+
+            std::size_t chunk_size = 0;
+            try {
+                chunk_size = std::stoul(line, nullptr, 16);
+            } catch (...) {
+                FOX_HTTP_LOG("Connection(" << id() << ")::chunked size parse failed: '" << line << "'");
+                is_processing_.store(false, std::memory_order_relaxed);
+                socket_.close();
+                return;
+            }
+
+            if (chunk_size == 0) {
+                read_chunk_trailers(std::move(request), std::move(acc));
+            } else {
+                read_chunk_data(std::move(request), std::move(acc), chunk_size);
+            }
+        });
+}
+
+void Connection::read_chunk_data(std::shared_ptr<HttpRequest> request,
+                                 std::shared_ptr<std::string> acc,
+                                 std::size_t chunk_size) {
+    // Take whatever data bytes are already in the streambuf (up to chunk_size).
+    std::size_t have = request_buffer_.size();
+    std::size_t to_take_from_buf = std::min(have, chunk_size);
+    if (to_take_from_buf > 0) {
+        auto begin = asio::buffers_begin(request_buffer_.data());
+        acc->append(begin, begin + to_take_from_buf);
+        request_buffer_.consume(to_take_from_buf);
+    }
+
+    std::size_t remaining = chunk_size - to_take_from_buf;
+    if (remaining == 0) {
+        read_chunk_trailing_crlf(std::move(request), std::move(acc));
+        return;
+    }
+
+    // Read the remaining data bytes directly into acc (pre-resize, no copy).
+    std::size_t offset = acc->size();
+    acc->resize(offset + remaining);
+    auto self(shared_from_this());
+    asio::async_read(socket_,
+        asio::buffer(acc->data() + offset, remaining),
+        asio::transfer_exactly(remaining),
+        [this, self, request, acc](const boost::system::error_code& ec, std::size_t /*n*/) {
+            if (ec) {
+                is_processing_.store(false, std::memory_order_relaxed);
+                FOX_HTTP_LOG("Connection(" << id() << ")::chunk data - " << ec.message());
+                socket_.close();
+                return;
+            }
+            read_chunk_trailing_crlf(std::move(request), std::move(acc));
+        });
+}
+
+void Connection::read_chunk_trailing_crlf(std::shared_ptr<HttpRequest> request,
+                                          std::shared_ptr<std::string> acc) {
+    // Each chunk ends with CRLF (2 bytes) after its data.
+    if (request_buffer_.size() >= 2) {
+        request_buffer_.consume(2);
+        read_chunked_body(std::move(request), std::move(acc));
+        return;
+    }
+    std::size_t need = 2 - request_buffer_.size();
+    request_buffer_.consume(request_buffer_.size());
+    auto dummy = std::make_shared<std::array<char, 2>>();
+    auto self(shared_from_this());
+    asio::async_read(socket_,
+        asio::buffer(dummy->data(), need),
+        asio::transfer_exactly(need),
+        [this, self, request, acc, dummy](const boost::system::error_code& ec, std::size_t /*n*/) {
+            if (ec) {
+                is_processing_.store(false, std::memory_order_relaxed);
+                FOX_HTTP_LOG("Connection(" << id() << ")::chunk CRLF - " << ec.message());
+                socket_.close();
+                return;
+            }
+            read_chunked_body(std::move(request), std::move(acc));
+        });
+}
+
+void Connection::read_chunk_trailers(std::shared_ptr<HttpRequest> request,
+                                     std::shared_ptr<std::string> acc) {
+    // After the zero-size chunk, zero or more trailer header lines terminated
+    // by CRLF, then a final empty line. We drop trailers on the floor.
+    auto self(shared_from_this());
+    asio::async_read_until(socket_, request_buffer_, "\r\n",
+        [this, self, request, acc](const boost::system::error_code& ec, std::size_t n) {
+            if (ec) {
+                is_processing_.store(false, std::memory_order_relaxed);
+                FOX_HTTP_LOG("Connection(" << id() << ")::chunk trailer - " << ec.message());
+                socket_.close();
+                return;
+            }
+            bool empty_line = (n == 2);
+            request_buffer_.consume(n);
+            if (empty_line) {
+                request->set_body(std::move(*acc));
+                dispatch(std::move(request));
+            } else {
+                read_chunk_trailers(std::move(request), std::move(acc));
+            }
         });
 }
 
