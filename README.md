@@ -12,7 +12,8 @@
 - **内置 Router**：静态、`:param`、`*catchall` 路径模式，默认 404/405 处理。
 - **压测基线**：`ab -n 100000 -c 1000 -k` 于 12 核机器稳定 ~285k req/s，
   keep-alive 100%，0 失败；`writev` 模式与之相当（~275k req/s）。
-- **异常安全**：handler 抛异常时 io 线程不崩，头未发则自动 500 + 关连接。
+- **异常安全**：handler 抛异常时进程不崩。如果响应头还没发送，自动替换成
+  500 Internal Server Error 并关闭连接；如果已经在发送中，记录日志后关闭连接。
 
 > 如果你在迁移已有 `httpserver::` API 的项目过来，见 [`MIGRATION.md`](MIGRATION.md)。
 > 架构决策记录在 [`DESIGN.md`](DESIGN.md)，阶段变更历史在

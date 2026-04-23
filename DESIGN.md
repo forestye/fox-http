@@ -616,8 +616,9 @@ httpserver/
 - ~~动态路由参数暴露~~ → Phase 2：`req.param("id")` 接口
 - ~~handler 线程池默认大小~~ → Phase 3：`4 × hw_concurrency`，可通过 `set_stream_pool_size()` 配置
 - ~~handler 抛异常~~ → Phase 5：Connection 在 dispatch 和 stream lambda 处都
-  加了 try/catch。头未发时改写为 500 + 异常消息；头已发时 log + 关连接。
-  io 线程不会因 handler 崩溃。
+  加了 try/catch。如果响应头还没发送，替换成 500 + 异常消息；如果响应已在
+  发送中（状态行和 headers 已写入 socket），log 后关连接。进程和 io 线程
+  不会因 handler 崩溃。
 - ~~项目名~~ → 2026-04-19 重命名为 `fox-http`
 - ~~chunked 请求体~~ → 2026-04-20：Connection 识别 `Transfer-Encoding: chunked`
   并走独立的异步状态机（size 行 → 数据 + CRLF → 下一 chunk；0-size 后 drop
@@ -645,7 +646,7 @@ httpserver/
 | 2026-04-16 | 换用 CMake | 周边项目已是 CMake；find_package 依赖传播比 make 可靠 |
 | 2026-04-16 | 项目名暂不改 | 未想好；重构中途改名是无意义扰动 |
 | 2026-04-16 | `HttpResponse` 三模式：Buffered / Immediate(writev) / Stream(lambda) | 三种场景需求冲突，统一模型只能牺牲两个；三模式互斥 fail fast 避免误用 |
-| 2026-04-19 | Handler 抛异常 → Connection catch 后回 500 | io 线程异常传播会崩溃进程；头未发时 500 可清洁替换，头已发时只能 close |
+| 2026-04-19 | Handler 抛异常 → Connection catch 后回 500 | io 线程异常传播会崩溃进程；响应头未发送时 500 可清洁替换，已在发送中时只能 close |
 | 2026-04-16 | Stream 用 lambda 而非 coroutine | C++20 协程依赖太重；lambda 方案同 handler 内可混用流式/非流式 |
 | 2026-04-16 | Request body eager 读取，暂不支持流式上传 | 周边工具无此需求；流式上传需重构 Connection 状态机 |
 | 2026-04-16 | Header 查询改为大小写不敏感 | RFC 7230 规定；当前 `std::map` 实现是 bug 级别 corner case |
