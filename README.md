@@ -6,16 +6,17 @@
 - **单一 handler 入口**：`fox::http::HttpHandler::handle(req, resp)`。
 - **三种响应模式**，handler 按需选择：
   - `Buffered` — 填好 body 返回，库负责序列化 + `async_write`
-  - `Immediate` — `resp.writev(iov, n)` 同步一次 `writev` 落盘，零拷贝
+  - `Immediate` — `resp.writev(iov, n)` 同步一次 `writev` 发到 socket，零拷贝
   - `Stream` — `resp.stream([](auto& r){ ... })` 把后续工作推到 handler
-    线程池，io 线程立即释放
+    线程池，原本处理请求的 io 线程立即空出来接其他连接
 - **内置 Router**：静态、`:param`、`*catchall` 路径模式，默认 404/405 处理。
 - **压测基线**：`ab -n 100000 -c 1000 -k` 于 12 核机器稳定 ~285k req/s，
   keep-alive 100%，0 失败；`writev` 模式与之相当（~275k req/s）。
 - **异常安全**：handler 抛异常时进程不崩。如果响应头还没发送，自动替换成
   500 Internal Server Error 并关闭连接；如果已经在发送中，记录日志后关闭连接。
 
-> 如果你在迁移已有 `httpserver::` API 的项目过来，见 [`MIGRATION.md`](MIGRATION.md)。
+> 如果你要从基于 PhotonLibOS 的 `photon_http_server` + `route` + `weave++`
+> 工具链迁移过来，见 [`MIGRATION.md`](MIGRATION.md)。
 > 架构决策记录在 [`DESIGN.md`](DESIGN.md)，阶段变更历史在
 > [`CHANGELOG.md`](CHANGELOG.md)。
 
@@ -64,7 +65,7 @@ public:
 
 int main() {
     Hello h;
-    HttpServer server(8080);      // 0 = auto thread count (hw_concurrency)
+    HttpServer server(8080);      // 第 2 个参数是 io 线程数，省略即 hardware_concurrency
     server.set_handler(&h);
     return server.run();          // blocks until SIGINT / SIGTERM
 }
@@ -114,8 +115,8 @@ void handle(HttpRequest& req, HttpResponse& resp) override {
 
 ### 3. Stream（handler 线程池，适合 LLM/SSE）
 
-handler 返回后，传入的 lambda 被 post 到懒加载的线程池执行；io 线程立即
-释放。lambda 内可以阻塞（等 LLM token、DB 查询、sleep）。
+handler 返回后，传入的 lambda 被 post 到懒加载的线程池执行，io 线程随即
+空出来接其他连接。lambda 内可以阻塞（等 LLM token、DB 查询、sleep）。
 
 ```cpp
 void handle(HttpRequest&, HttpResponse& resp) override {
@@ -174,8 +175,9 @@ router.set_not_found_handler([](HttpRequest&, HttpResponse& r) {
 });
 ```
 
-匹配优先级：**静态精确 > 动态同段数匹配 > catchall 长前缀优先**；若某 path 在
-其它 HTTP 方法有注册但当前请求方法不匹配，返回 405 + 自动 `Allow` 头。
+匹配优先级：**静态精确 > 动态路由（段数相同的优先）> catchall（字面前缀
+最长的优先）**。若某 path 在其它 HTTP 方法有注册但当前请求方法不匹配，
+返回 405 + 自动 `Allow` 头。
 
 ---
 
@@ -217,7 +219,7 @@ cmake -S . -B build -DFOX_HTTP_DEBUG_LOG=ON
 
 ```bash
 cd build
-ctest --output-on-failure                       # 运行单元测试（35 个）
+ctest --output-on-failure                       # 运行单元 + 集成测试（36 个）
 ./hello_world 18080 &                           # 起 demo server
 ab -n 100000 -c 1000 -k http://127.0.0.1:18080/hello
 ```
@@ -251,13 +253,15 @@ fox-http/
 ├── src/                       # 实现（Connection / TimerManager 等不导出）
 ├── test/
 │   ├── hello_world.cpp        # 可执行 demo
-│   ├── router_test.cpp        # gtest 用例
+│   ├── router_test.cpp        # gtest 用例（35 个）
 │   ├── response_test.cpp
 │   ├── request_test.cpp
-│   └── util_test.cpp
+│   ├── util_test.cpp
+│   └── integration/
+│       └── chunked_body_test.py  # 集成测试（chunked 请求体）
 ├── CMakeLists.txt
 ├── DESIGN.md                  # 架构决策与权衡
-├── MIGRATION.md               # 从旧 httpserver 名迁移到 fox-http
+├── MIGRATION.md               # 从 PhotonLibOS 工具链迁移到 fox 生态
 └── CHANGELOG.md               # 阶段变更记录
 ```
 
