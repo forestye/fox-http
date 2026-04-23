@@ -272,7 +272,8 @@ fox-http/
 - [`fox-route`](../fox-route) — 从 CRDL DSL 生成 Router 类的代码生成器
 - [`fox-page`](../fox-page) — 从 HTML 模板生成 `void fn(HttpResponse&, ...)`
   的代码生成器，利用 Immediate `writev` 做零拷贝
-- 三者组合的端到端示例见 `simple_http_template_hs/`（类似 Web 框架的全栈 demo）
+- [`fox-http-example`](https://github.com/forestye/fox-http-example) — 三者组合
+  的端到端示例（类似 Web 框架的全栈 demo，含路由、页面模板、MySQL、JSON 等）
 
 ---
 

@@ -16,8 +16,9 @@
 | `route/crdl_func`（抽签名给 weave++ 用） | `fox-route-func` |
 | `weave++`（HTML → C++ 生成器） | `fox-page` |
 
-**端到端已验证的迁移样板：**`/home/yelin/code/simple_http_template_hs`（从
-`simple_http_template` 拷贝后改造而来）。本文所有示例都对得上那里的实际代码。
+**端到端已验证的迁移样板：**`/home/yelin/code/fox-http-example`（从原
+`simple_http_template` 拷贝后改造而来，原名 `simple_http_template_hs`，
+2026-04-23 重命名）。本文所有示例都对得上那里的实际代码。
 
 ---
 
@@ -232,7 +233,7 @@ void sse(fox::http::HttpResponse& resp) {
 
 > 唯一例外：原先 route 的早期版本支持 `-> string foo()` 作为返回类型，新
 > 版本统一为 `text`/`html`/`json`。如果你的 `.crdl` 用了 `string`，改成
-> `text` 即可。`simple_http_template_hs` 就做了这个调整。
+> `text` 即可。`fox-http-example` 就做了这个调整。
 
 ### 生成器调用
 
@@ -429,7 +430,7 @@ find . -type f -name "CMakeLists.txt" ! -path "*/build/*" ! -path "*/.git/*" \
 
 ## 9. 完整迁移样板
 
-`/home/yelin/code/simple_http_template_hs/` 是从旧 `simple_http_template`（基于
+`/home/yelin/code/fox-http-example/` 是从旧 `simple_http_template`（基于
 Photon 工具链）迁移过来的完整工作项目：
 
 - 12 条路由（static / dynamic param / filesystem / JSON / text / HTML）
