@@ -92,15 +92,26 @@ ab 回归，但没做原 Photon 的对照。
 - 修正预期：DESIGN 原本假设"换架构允许 10% 吞吐下滑"，实际提升 3×——
   10% 预算始终未触底。
 
-### 附带发现
+### 附带发现（2026-04-23 更正）
 
-过去 Phase 1-4 的 ab 压测（~285k）都没显式 `-DCMAKE_BUILD_TYPE=Release`——
-`CMakeLists.txt` 的 `if(NOT CMAKE_BUILD_TYPE) set(Release)` 对配置期的
-cache 初值判断不对，实际拿到空字符串也会被认为"已设"。此次压测前重建时
-加了 `-DCMAKE_BUILD_TYPE=Release` 才命中 `-O3`。结果数字与之前一致
-（~285k），说明历史压测可能已经在 Release 了（或 -O3 对此工作负载影响有限），
-但值得警觉；后续若想精确对比，以 `CMakeCache.txt` 里的 `CMAKE_BUILD_TYPE:STRING`
-值为准。
+初版记录怀疑过去 Phase 1-4 压测可能没开 `-O3`，因为 `CMakeCache.txt` 里
+`CMAKE_BUILD_TYPE:STRING=` 是空的。后来实测编译命令（`cmake --build ... --verbose`）
+证明：即便 cache 显示空，实际 `c++` 调用里一直有 `-O3 -DNDEBUG`。
+
+根因：`CMakeLists.txt` 原先写的是
+
+```cmake
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)      # 没加 CACHE
+endif()
+```
+
+没带 `CACHE` 的 `set()` 只改局部作用域变量，CMake 会用它选 `CMAKE_CXX_FLAGS_RELEASE`
+去编译；但 cache 变量从未被写过 Release，所以 `cmake -LA` / cache 文件看起来
+一直是空。功能正确，观感误导。
+
+→ 2026-04-23 改为 `set(... Release CACHE STRING "..." FORCE)`，cache 和
+效果从此一致。Phase 1-4 压测确实是 Release 构建，数字无需重测。
 
 ---
 

@@ -6,7 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+    # Use CACHE STRING ... FORCE so CMakeCache.txt reflects the effective
+    # build type. Plain set() without CACHE only updates the local variable;
+    # compile flags would still be correct, but `cmake -LA` and readers of
+    # the cache would see an empty CMAKE_BUILD_TYPE and get confused.
+    set(CMAKE_BUILD_TYPE Release CACHE STRING
+        "Build type (Debug/Release/RelWithDebInfo/MinSizeRel)" FORCE)
 endif()
 
 option(FOX_HTTP_BUILD_TESTS "Build fox-http tests and examples" ON)
