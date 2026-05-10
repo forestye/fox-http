@@ -38,11 +38,14 @@
 ```bash
 git clone <this-repo> fox-http
 cd fox-http
-cmake -S . -B build
+cmake -S . -B build -DFOX_HTTP_BUILD_TESTS=ON   # 打开后才会编译 hello_world / unit_tests
 cmake --build build -j
 ./build/hello_world 8080 &
 curl -s http://127.0.0.1:8080/hello   # → "hello"
 ```
+
+> 库默认只编译 `fox-http` 静态库本身，不构建 demo 与测试目标。
+> 想跑测试或体验 demo，请配置时显式 `-DFOX_HTTP_BUILD_TESTS=ON`。
 
 最小 main：
 
@@ -187,13 +190,15 @@ router.set_not_found_handler([](HttpRequest&, HttpResponse& r) {
 
 ```cmake
 if(NOT TARGET fox-http::fox-http)
-    set(FOX_HTTP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     add_subdirectory(path/to/fox-http ${CMAKE_BINARY_DIR}/fox-http_build)
 endif()
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE fox-http::fox-http)
 ```
+
+`FOX_HTTP_BUILD_TESTS` 默认 OFF，因此子目录引入不会带入 fox-http 的 demo
+和测试目标，无需在父项目里再 `set(... OFF FORCE)`。
 
 ### 通过安装使用（`find_package`）
 
@@ -217,7 +222,11 @@ cmake -S . -B build -DFOX_HTTP_DEBUG_LOG=ON
 
 ## 测试与压测
 
+测试目标默认不构建，需显式打开：
+
 ```bash
+cmake -S . -B build -DFOX_HTTP_BUILD_TESTS=ON
+cmake --build build -j
 cd build
 ctest --output-on-failure                       # 运行单元 + 集成测试（36 个）
 ./hello_world 18080 &                           # 起 demo server
@@ -251,6 +260,8 @@ fox-http/
 │   ├── http_router.h          # HttpRouter
 │   └── http_util.h            # url_decode / parse_form_urlencoded / stringify
 ├── src/                       # 实现（Connection / TimerManager 等不导出）
+├── cmake/
+│   └── fox-httpConfig.cmake.in  # find_package() 入口模板
 ├── test/
 │   ├── hello_world.cpp        # 可执行 demo
 │   ├── router_test.cpp        # gtest 用例（35 个）

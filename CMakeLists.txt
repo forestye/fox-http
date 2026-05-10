@@ -14,7 +14,7 @@ if(NOT CMAKE_BUILD_TYPE)
         "Build type (Debug/Release/RelWithDebInfo/MinSizeRel)" FORCE)
 endif()
 
-option(FOX_HTTP_BUILD_TESTS "Build fox-http tests and examples" ON)
+option(FOX_HTTP_BUILD_TESTS "Build fox-http tests and examples" OFF)
 option(FOX_HTTP_DEBUG_LOG "Enable FOX_HTTP_LOG output" OFF)
 
 # Boost.Asio is header-only in modern Boost (>=1.87); we still need the
