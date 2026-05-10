@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(fox-http CXX)
+project(fox-http VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -106,6 +106,9 @@ endif()
 # ─── Install ─────────────────────────────────────────────────────
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(FOX_HTTP_CMAKE_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/fox-http)
 
 install(TARGETS fox-http
     EXPORT fox-httpTargets
@@ -120,5 +123,23 @@ install(DIRECTORY include/fox-http
 install(EXPORT fox-httpTargets
     FILE fox-httpTargets.cmake
     NAMESPACE fox-http::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fox-http
+    DESTINATION ${FOX_HTTP_CMAKE_INSTALL_DIR}
+)
+
+configure_package_config_file(
+    cmake/fox-httpConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/fox-httpConfig.cmake
+    INSTALL_DESTINATION ${FOX_HTTP_CMAKE_INSTALL_DIR}
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/fox-httpConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/fox-httpConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/fox-httpConfigVersion.cmake
+    DESTINATION ${FOX_HTTP_CMAKE_INSTALL_DIR}
 )

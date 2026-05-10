@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# fox-http's INTERFACE_LINK_LIBRARIES references Boost::headers and
+# Threads::Threads — those imported targets must exist in the consumer's
+# project before the targets file is loaded, so re-find them here.
+find_dependency(Boost)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/fox-httpTargets.cmake")
+
+check_required_components(fox-http)
