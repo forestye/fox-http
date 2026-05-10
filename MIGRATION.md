@@ -16,7 +16,7 @@
 | `route/crdl_func`（抽签名给 weave++ 用） | `fox-route-func` |
 | `weave++`（HTML → C++ 生成器） | `fox-page` |
 
-**端到端已验证的迁移样板：**`/home/yelin/code/fox-http-example`（从原
+**端到端已验证的迁移样板：**`fox-http-example`（从原
 `simple_http_template` 拷贝后改造而来，原名 `simple_http_template_hs`，
 2026-04-23 重命名）。本文所有示例都对得上那里的实际代码。
 
@@ -430,7 +430,7 @@ find . -type f -name "CMakeLists.txt" ! -path "*/build/*" ! -path "*/.git/*" \
 
 ## 9. 完整迁移样板
 
-`/home/yelin/code/fox-http-example/` 是从旧 `simple_http_template`（基于
+`fox-http-example/` 是从旧 `simple_http_template`（基于
 Photon 工具链）迁移过来的完整工作项目：
 
 - 12 条路由（static / dynamic param / filesystem / JSON / text / HTML）

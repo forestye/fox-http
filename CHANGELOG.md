@@ -194,7 +194,7 @@ DESIGN.md §11 列为未决事项之一："handler 抛异常怎么办？目前�
 
 从 PhotonLibOS 栈迁移到 httpserver。原项目保持不动；建立了三个平行的 `_hs` 副本：
 
-- `/home/yelin/code/route_hs`：CRDL 路由代码生成器。`src/code_generator.cpp`
+- `route_hs`：CRDL 路由代码生成器。`src/code_generator.cpp`
   重写了模板字符串：生成的 `Router` 继承 `httpserver::HttpHandler`，`handle()`
   接受 `HttpRequest&` / `HttpResponse&`；`Verb` → `HttpRequest::Method`；
   `resp.set_result` → `resp.set_status`；`resp.headers.insert` → `resp.headers().insert`；
@@ -202,12 +202,12 @@ DESIGN.md §11 列为未决事项之一："handler 抛异常怎么办？目前�
   `ANY` 方法展开为 7 种 HTTP 方法的重复注册；
   FILESYSTEM 路由改为生成内联简单文件服务器（`std::filesystem` + `std::ifstream`
   + 扩展名到 Content-Type 映射），不再依赖 Photon 文件系统。
-- `/home/yelin/code/weave++_hs`：HTML 模板生成器。三个 wrapper 方法的 includes
+- `weave++_hs`：HTML 模板生成器。三个 wrapper 方法的 includes
   和 using 全部切到 httpserver；`ResponseObject&` → `HttpResponse&`；
   `resp.set_result` → `resp.set_status`；`resp.headers.*` → `resp.headers().*`；
   `LOG_ERROR` → `std::cerr`。`writev` / iovec 语义不变，weave++ 的零拷贝设计
   完整保留。
-- `/home/yelin/code/simple_http_template_hs`：端到端示例。CMakeLists
+- `simple_http_template_hs`：端到端示例。CMakeLists
   `add_subdirectory(../httpserver)`，`find_program` 定位 `crdl_compiler`/
   `crdl_func`/`weave++` 于相邻 `_hs` 项目的 build 目录。`test.cpp` 用
   `httpserver::HttpServer` 替换 `PhotonHttpServer`，DB init 改为非致命

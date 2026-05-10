@@ -10,13 +10,13 @@
 
 ### 1.1 当前生态
 
-- **`/home/yelin/code/httpserver`**（本项目）：基于 Boost.Asio 的轻量级 HTTP 服务器，多线程 `io_context`，支持 keep-alive。最近刚修完多线程压测下的 `async_read_until` / `consume` 竞态（CHANGELOG 2026-02-18），ab 压测 100,000 次请求 0 失败，313k req/s。
-- **`/home/yelin/code/photon_http_server`**：PhotonLibOS HTTP 服务器的薄封装，对外暴露 `PhotonHttpServer(port, vcpu_num)` + `add_handler(HTTPHandler*)` + `run()`。
-- **`/home/yelin/code/http_common`**：PhotonLibOS 生态的工具函数（`parse_form_urlencoded`、`url_decode`、`http_400_bad_request` 等）。
-- **`/home/yelin/code/route`**：CRDL → Router 代码生成器。生成的 `Router` 继承 `photon::net::http::HTTPHandler`，实现静态 + 动态路由（`/user/:id`）。
-- **`/home/yelin/code/weave++`**：HTML 模板 → C++ 代码生成器。生成代码重度依赖 `resp.writev(iov_list.data(), iov_list.size())` 零拷贝发送静态字符串片段 + 动态值。
-- **`/home/yelin/code/simple_http_template`**：端到端示例项目，依赖上面全部组件。
-- **`/home/yelin/code/yxmysql`**：MySQL 客户端，独立，不依赖 HTTP。
+- **`httpserver`**（本项目）：基于 Boost.Asio 的轻量级 HTTP 服务器，多线程 `io_context`，支持 keep-alive。最近刚修完多线程压测下的 `async_read_until` / `consume` 竞态（CHANGELOG 2026-02-18），ab 压测 100,000 次请求 0 失败，313k req/s。
+- **`photon_http_server`**：PhotonLibOS HTTP 服务器的薄封装，对外暴露 `PhotonHttpServer(port, vcpu_num)` + `add_handler(HTTPHandler*)` + `run()`。
+- **`http_common`**：PhotonLibOS 生态的工具函数（`parse_form_urlencoded`、`url_decode`、`http_400_bad_request` 等）。
+- **`route`**：CRDL → Router 代码生成器。生成的 `Router` 继承 `photon::net::http::HTTPHandler`，实现静态 + 动态路由（`/user/:id`）。
+- **`weave++`**：HTML 模板 → C++ 代码生成器。生成代码重度依赖 `resp.writev(iov_list.data(), iov_list.size())` 零拷贝发送静态字符串片段 + 动态值。
+- **`simple_http_template`**：端到端示例项目，依赖上面全部组件。
+- **`yxmysql`**：MySQL 客户端，独立，不依赖 HTTP。
 
 ### 1.2 为什么要迁移
 
