@@ -75,11 +75,17 @@ void Connection::start() {
 }
 
 void Connection::cancel() {
-    if (socket_.is_open()) socket_.cancel();
+    if (socket_.is_open()) {
+        boost::system::error_code ec;
+        socket_.cancel(ec);
+    }
 }
 
 void Connection::close() {
-    if (socket_.is_open()) socket_.close();
+    if (socket_.is_open()) {
+        boost::system::error_code ec;
+        socket_.close(ec);
+    }
 }
 
 bool Connection::is_idle() const {
@@ -97,7 +103,7 @@ void Connection::read() {
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
                 if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
-                    socket_.close();
+                    close();
                 } else {
                     FOX_HTTP_LOG("Connection(" << id() << ")::read() - Error: " << ec.message());
                 }
@@ -114,7 +120,7 @@ void Connection::read() {
             auto request = std::make_shared<HttpRequest>();
             if (!request->parse_header(header_data)) {
                 FOX_HTTP_LOG("Connection(" << id() << ")::read() - malformed header");
-                socket_.close();
+                close();
                 return;
             }
 
@@ -178,7 +184,7 @@ void Connection::read_fixed_body(std::shared_ptr<HttpRequest> request, std::size
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
                 FOX_HTTP_LOG("Connection(" << id() << ")::read_body() - Error: " << ec.message());
-                socket_.close();
+                close();
                 return;
             }
             request->set_body(std::move(*body_ptr));
@@ -210,7 +216,7 @@ void Connection::read_chunked_body(std::shared_ptr<HttpRequest> request,
                 is_processing_.store(false, std::memory_order_relaxed);
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunked size line - "
                              << ec.message());
-                socket_.close();
+                close();
                 return;
             }
 
@@ -229,7 +235,7 @@ void Connection::read_chunked_body(std::shared_ptr<HttpRequest> request,
             } catch (...) {
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunked size parse failed: '" << line << "'");
                 is_processing_.store(false, std::memory_order_relaxed);
-                socket_.close();
+                close();
                 return;
             }
 
@@ -270,7 +276,7 @@ void Connection::read_chunk_data(std::shared_ptr<HttpRequest> request,
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunk data - " << ec.message());
-                socket_.close();
+                close();
                 return;
             }
             read_chunk_trailing_crlf(std::move(request), std::move(acc));
@@ -296,7 +302,7 @@ void Connection::read_chunk_trailing_crlf(std::shared_ptr<HttpRequest> request,
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunk CRLF - " << ec.message());
-                socket_.close();
+                close();
                 return;
             }
             read_chunked_body(std::move(request), std::move(acc));
@@ -313,7 +319,7 @@ void Connection::read_chunk_trailers(std::shared_ptr<HttpRequest> request,
             if (ec) {
                 is_processing_.store(false, std::memory_order_relaxed);
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunk trailer - " << ec.message());
-                socket_.close();
+                close();
                 return;
             }
             bool empty_line = (n == 2);
@@ -428,7 +434,11 @@ void Connection::write_buffered(HttpResponse& response) {
             if (keep_alive_) {
                 read();
             } else if (socket_.is_open()) {
-                socket_.shutdown(tcp::socket::shutdown_both);
+                // Non-throwing overload: the peer may already have disconnected
+                // (ENOTCONN), and an exception here would escape the io_context
+                // run loop and terminate the process.
+                boost::system::error_code shutdown_ec;
+                socket_.shutdown(tcp::socket::shutdown_both, shutdown_ec);
             }
         });
 }
