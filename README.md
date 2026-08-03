@@ -220,6 +220,35 @@ cmake -S . -B build -DFOX_HTTP_DEBUG_LOG=ON
 
 ---
 
+## 生产部署建议
+
+### 请求体大小上限（必读）
+
+fox-http **默认不限制请求体大小**：固定长度体按 Content-Length 一次性
+`reserve` + 全量读入内存，chunked 体逐块累积。不设上限时，恶意客户端
+声明超大 Content-Length（或持续发送 chunk）即可制造内存压力。生产环境
+请二选一（或都做）：
+
+1. **库内限制**（推荐，零依赖）：
+
+   ```cpp
+   HttpServer server(8080);
+   server.set_max_body_size(8 * 1024 * 1024);   // 8 MB，超限直接回 413 并断开
+   ```
+
+   对 Content-Length 与 chunked 两种编码均生效；固定长度体在读 body
+   之前仅凭声明值即拒绝，不产生大内存分配。`0`（默认值）表示不限制。
+
+2. **前置 nginx** 并设置 [`client_max_body_size`](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)：
+
+   ```nginx
+   client_max_body_size 8m;
+   ```
+
+两者语义一致（超限均为 413）；直接暴露公网的服务必须至少配置其一。
+
+---
+
 ## 测试与压测
 
 测试目标默认不构建，需显式打开：
@@ -228,7 +257,7 @@ cmake -S . -B build -DFOX_HTTP_DEBUG_LOG=ON
 cmake -S . -B build -DFOX_HTTP_BUILD_TESTS=ON
 cmake --build build -j
 cd build
-ctest --output-on-failure                       # 运行单元 + 集成测试（36 个）
+ctest --output-on-failure                       # 运行单元 + 集成测试（37 个）
 ./hello_world 18080 &                           # 起 demo server
 ab -n 100000 -c 1000 -k http://127.0.0.1:18080/hello
 ```

@@ -83,7 +83,8 @@ struct HttpServer::Impl : StreamDispatcher {
     }
 
     void accept() {
-        auto conn = std::make_shared<Connection>(io_context_, *handler_, *this);
+        auto conn = std::make_shared<Connection>(io_context_, *handler_, *this,
+                                                 max_body_size_);
         acceptor_.async_accept(conn->socket(),
             [this, conn](const boost::system::error_code& ec) {
                 if (!ec) {
@@ -101,6 +102,7 @@ struct HttpServer::Impl : StreamDispatcher {
     HttpHandler* handler_ = nullptr;
 
     std::size_t stream_pool_size_ = 0;  // 0 = default (4 * hw_concurrency)
+    std::size_t max_body_size_ = 0;     // 0 = unlimited
     std::once_flag stream_pool_init_;
     std::unique_ptr<asio::thread_pool> stream_pool_;
 };
@@ -116,6 +118,10 @@ void HttpServer::set_handler(HttpHandler* handler) {
 
 void HttpServer::set_stream_pool_size(std::size_t n) {
     impl_->stream_pool_size_ = n;
+}
+
+void HttpServer::set_max_body_size(std::size_t n) {
+    impl_->max_body_size_ = n;
 }
 
 int HttpServer::run() {

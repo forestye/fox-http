@@ -100,6 +100,14 @@ if(FOX_HTTP_BUILD_TESTS)
                 PYTHON=${PYTHON3}
                 sh -c "$<TARGET_FILE:hello_world> 18099 >/dev/null 2>&1 & SRV=$!; sleep 0.5; ${PYTHON3} ${CMAKE_CURRENT_SOURCE_DIR}/test/integration/chunked_body_test.py --port 18099; RC=$?; kill $SRV 2>/dev/null; exit $RC"
         )
+        # Integration test: request body size limit (413 Payload Too Large).
+        # hello_world args: <port> <io_threads> <max_body_size>.
+        add_test(NAME MaxBodySizeIntegration
+            COMMAND ${CMAKE_COMMAND} -E env
+                HELLO_WORLD=$<TARGET_FILE:hello_world>
+                PYTHON=${PYTHON3}
+                sh -c "$<TARGET_FILE:hello_world> 18100 0 1024 >/dev/null 2>&1 & SRV=$!; sleep 0.5; ${PYTHON3} ${CMAKE_CURRENT_SOURCE_DIR}/test/integration/max_body_size_test.py --port 18100 --limit 1024; RC=$?; kill $SRV 2>/dev/null; exit $RC"
+        )
     endif()
 endif()
 

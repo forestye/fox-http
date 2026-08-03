@@ -18,8 +18,10 @@ using namespace fox::http;
 int main(int argc, char* argv[]) {
     unsigned short port = 8080;
     std::size_t io_threads = 0;
+    std::size_t max_body_size = 0;
     if (argc > 1) port = static_cast<unsigned short>(std::atoi(argv[1]));
     if (argc > 2) io_threads = static_cast<std::size_t>(std::atoi(argv[2]));
+    if (argc > 3) max_body_size = static_cast<std::size_t>(std::atoll(argv[3]));
 
     HttpRouter router;
 
@@ -94,6 +96,7 @@ int main(int argc, char* argv[]) {
 
     HttpServer server(port, io_threads);
     server.set_handler(&router);
+    server.set_max_body_size(max_body_size);
     std::cout << "hello_world listening on port " << port << std::endl;
     return server.run();
 }

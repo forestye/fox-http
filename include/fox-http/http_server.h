@@ -26,6 +26,14 @@ public:
     // created until the first stream response runs.
     void set_stream_pool_size(std::size_t n);
 
+    // Maximum accepted request body size in bytes; requests exceeding it are
+    // rejected with "413 Payload Too Large" and the connection is closed.
+    // Applies to both Content-Length and chunked bodies. 0 (the default)
+    // means unlimited — production deployments should either set a limit
+    // here or enforce one at a fronting proxy (nginx client_max_body_size).
+    // Call before run(); the limit is captured per-connection at accept time.
+    void set_max_body_size(std::size_t n);
+
     // Blocks until SIGINT / SIGTERM / SIGTSTP is received. Returns 0 on
     // clean shutdown, non-zero on startup failure.
     int run();

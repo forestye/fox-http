@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-08-03 请求体大小上限（set_max_body_size / 413）
+
+### 背景
+
+使用方（nous-monthly 项目）在《fox 系列文档与示例改进建议》P1-2 指出：
+固定长度体按 Content-Length 直接 `reserve` + 全量读入内存，无上限配置，
+恶意客户端声明超大 Content-Length 即可制造内存压力。
+
+### 改动
+
+- `HttpServer::set_max_body_size(n)`：新公开 API，0（默认）= 不限制，
+  保持既有行为不变；限制在 accept 时传入每个 `Connection`。
+- `Connection::read_body()`：固定长度路径在读 body **之前**仅凭
+  Content-Length 声明值即拒绝，不产生大内存分配。
+- `Connection::read_chunked_body()`：每读到一个 chunk size 行即检查
+  已累积字节 + 本 chunk 大小，超限即拒绝。
+- 拒绝动作 `reject_payload_too_large()`：回 `413 Payload Too Large` +
+  `Connection: close`，写完后 shutdown。
+- `hello_world` 新增第 3 个参数 max_body_size，供集成测试使用。
+
+### 验证
+
+新增 `test/integration/max_body_size_test.py` + ctest 集成
+（`MaxBodySizeIntegration`，端口 18100，限制 1024 字节）。覆盖：
+固定长度体在限内 / 恰好等于限制 / 超限、仅凭声明值拒绝（宣称 100 MB
+不发 body）、chunked 限内 / 超限。6/6 通过；总 `ctest` 37/37。
+
+### 同步更新
+
+- README 新增「生产部署建议 → 请求体大小上限」一节：库内
+  `set_max_body_size` 与前置 nginx `client_max_body_size` 二选一，
+  直接暴露公网的服务必须至少配置其一。
+
+---
+
+## 2026-07-31 修复 IO 线程上抛异常的 socket 操作导致进程 terminate
+
+### 背景
+
+下游服务（guiyuanji-api-server）线上崩溃：客户端在非 keep-alive 响应
+写完前后主动断开时，`write_buffered()` 完成回调里的
+`socket_.shutdown(shutdown_both)`（无 error_code 重载）抛出
+`system_error`（ENOTCONN），异常穿出 `io_context::run()` 回调栈触发
+`std::terminate`。客户端提前断连是正常网络事件，等于外部可随意触发的
+进程级崩溃。
+
+### 改动
+
+`src/connection.cpp` 全量排查，所有 socket 操作改用带 `error_code`
+的非抛异常重载：
+
+- `write_buffered()` 回调：`shutdown(shutdown_both, ec)`（与
+  `finish_request()` 既有写法一致）；
+- `Connection::close()` / `cancel()`：`close(ec)` / `cancel(ec)`；
+- 各读路径错误分支的 9 处裸 `socket_.close()` 统一改为调用
+  `Connection::close()`。
+
+`remote_endpoint` / `set_option` 等其余可抛调用核查无遗漏
+（`set_option` 原本就是 ec 重载）。
+
+### 验证
+
+全量编译无警告；`ctest` 36/36 无回归。（ENOTCONN 需要客户端在
+shutdown 前恰好 RST，时序上难以确定性复现，未加集成用例。）
+
+---
+
 ## 2026-04-20 支持 chunked 请求体
 
 ### 背景

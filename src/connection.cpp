@@ -46,10 +46,12 @@ private:
 
 Connection::Connection(asio::io_context& io_context,
                        HttpHandler& handler,
-                       StreamDispatcher& dispatcher)
+                       StreamDispatcher& dispatcher,
+                       std::size_t max_body_size)
     : socket_(io_context),
       handler_(handler),
       dispatcher_(dispatcher),
+      max_body_size_(max_body_size),
       socket_stream_(std::make_unique<SocketStream>(socket_)) {
     ServerStatus::instance().increment_connection_count();
     last_active_time_ = std::chrono::system_clock::now();
@@ -146,6 +148,10 @@ void Connection::read_body(std::shared_ptr<HttpRequest> request) {
     }
 
     std::size_t body_len = request->content_length();
+    if (max_body_size_ != 0 && body_len > max_body_size_) {
+        reject_payload_too_large(body_len);
+        return;
+    }
     if (body_len == 0) {
         dispatch(std::move(request));
         return;
@@ -236,6 +242,11 @@ void Connection::read_chunked_body(std::shared_ptr<HttpRequest> request,
                 FOX_HTTP_LOG("Connection(" << id() << ")::chunked size parse failed: '" << line << "'");
                 is_processing_.store(false, std::memory_order_relaxed);
                 close();
+                return;
+            }
+
+            if (max_body_size_ != 0 && acc->size() + chunk_size > max_body_size_) {
+                reject_payload_too_large(acc->size() + chunk_size);
                 return;
             }
 
@@ -417,6 +428,21 @@ void Connection::replace_with_500(HttpResponse& response, std::string_view msg) 
     }
     response.set_body(std::move(body));
     keep_alive_ = false;
+}
+
+// Reply 413 and close. The client may still be sending body bytes we will
+// never read; Connection: close plus shutdown after the write tells it to
+// stop. announced is the size that tripped the limit (for the log only).
+void Connection::reject_payload_too_large([[maybe_unused]] std::size_t announced) {
+    FOX_HTTP_LOG("Connection(" << id() << ") body size " << announced
+                   << " exceeds limit " << max_body_size_ << ", replying 413");
+    keep_alive_ = false;
+    HttpResponse response;
+    response.set_status(413);
+    response.headers().content_type("text/plain; charset=utf-8");
+    response.headers().insert("Connection", "close");
+    response.set_body("413 Payload Too Large\n");
+    write_buffered(response);
 }
 
 void Connection::write_buffered(HttpResponse& response) {

@@ -16,9 +16,12 @@ class HttpResponse;
 
 class Connection : public std::enable_shared_from_this<Connection> {
 public:
+    // max_body_size: reject request bodies larger than this with 413;
+    // 0 = unlimited.
     Connection(boost::asio::io_context& io_context,
                HttpHandler& handler,
-               StreamDispatcher& dispatcher);
+               StreamDispatcher& dispatcher,
+               std::size_t max_body_size = 0);
     ~Connection();
 
     boost::asio::ip::tcp::socket& socket() { return socket_; }
@@ -51,12 +54,14 @@ private:
     void finish_request();
     void write_buffered(HttpResponse& response);
     void replace_with_500(HttpResponse& response, std::string_view msg);
+    void reject_payload_too_large(std::size_t announced);
 
     boost::asio::ip::tcp::socket socket_;
     boost::asio::streambuf request_buffer_;
     HttpHandler& handler_;
     StreamDispatcher& dispatcher_;
     bool keep_alive_ = false;
+    std::size_t max_body_size_ = 0;  // 0 = unlimited
     std::chrono::system_clock::time_point last_active_time_;
     std::atomic<bool> is_processing_{false};
 
